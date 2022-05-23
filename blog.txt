@@ -1,0 +1,13 @@
+QUESTION: Is it possible to dispute a withdrawal transaction? 
+ASSUMED: Is it NOT possible to dispute a withdrawaltransaction.
+
+ASSUMPTION: (2^63-1)/10000.0 unit per transaction is enough (922_337_203_685_477.5807)
+ASSUMPTION: (2^63-1)/10000.0 unit is enough for user balance calculations too
+
+ASSUMPTION: disputes can be started even on locked accounts
+
+QUESTION: Should we allow deposits onto locked accounts?
+ASSUMED: NO, but lets discuss!
+
+IDEA: decorate Amount and Account with a marker type - this way would be impossible to mix different units (USD/EUR/etc.)
+

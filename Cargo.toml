@@ -5,3 +5,4 @@ edition = "2021"
 authors = ["Tibor Prokai"]
 
 [dependencies]
+rust_decimal = "1.23"
