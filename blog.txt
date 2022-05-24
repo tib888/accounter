@@ -11,3 +11,4 @@ ASSUMED: NO, but lets discuss!
 
 IDEA: decorate Amount and Account with a marker type - this way would be impossible to mix different units (USD/EUR/etc.)
 
+NOTE: Pest parser chosen to parse and validate csv file content -> fast, easy to modify the rules in "actions.pest"

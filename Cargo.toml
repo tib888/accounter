@@ -6,3 +6,5 @@ authors = ["Tibor Prokai"]
 
 [dependencies]
 rust_decimal = "1.23"
+pest = "2.1"
+pest_derive = "2.1"

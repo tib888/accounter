@@ -1,0 +1,30 @@
+comma = _{ "," }
+id = _{ ASCII_DIGIT+ }
+
+wholes = {ASCII_DIGIT+}
+fraction = { ASCII_DIGIT{1,4} }
+sign = { "+"|"-" }
+decimal = @{ sign? ~ ((wholes ~ ("." ~ fraction)?) | ("." ~ fraction)) }
+
+tail = _{ (ANY)* }
+
+client_id = ${ id }
+transaction_id = ${ id }
+amount = @{ decimal }
+
+deposit = @{ "deposit" }
+withdrawal = @{ "withdrawal" }
+transaction_type = _{ deposit | withdrawal }
+transaction = _{ transaction_type ~ comma ~ client_id ~ comma ~ transaction_id ~ (comma ~ amount) }
+
+dispute = @{ "dispute" }
+resolve = @{ "resolve" }
+chargeback = @{ "chargeback" }
+arbitration_type = _{ dispute | resolve | chargeback}
+arbitration = _{ arbitration_type ~ comma ~ client_id ~ comma ~ transaction_id }
+
+action = _{ transaction | arbitration }
+
+line_input = _{ SOI ~ action ~ tail ~ EOI }
+
+WHITESPACE = _{ " " | "\t" }

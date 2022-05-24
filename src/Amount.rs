@@ -1,8 +1,8 @@
-use rust_decimal::{prelude::ToPrimitive, Decimal};
 /// Amount is a new type which represent funds.
 /// Any arithmetics with it must be carefully tought so the usual operators are not implemented, just checked ones
 /// Amount chosen not to be 'Decimal' based on the assumption that no more than 2^63/10000-1 units expected per transaction (or even in one account balance)
 /// + it is faster, more efficient to use fixed point calculations, than to work on decimals
+use rust_decimal::{prelude::ToPrimitive, Decimal};
 use std::fmt::Display;
 pub use std::str::FromStr;
 
