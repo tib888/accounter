@@ -19,8 +19,8 @@ transaction = _{ transaction_type ~ comma ~ client_id ~ comma ~ transaction_id ~
 
 dispute = @{ "dispute" }
 resolve = @{ "resolve" }
-chargeback = @{ "chargeback" }
-arbitration_type = _{ dispute | resolve | chargeback}
+charge_back = @{ "chargeback" }
+arbitration_type = _{ dispute | resolve | charge_back}
 arbitration = _{ arbitration_type ~ comma ~ client_id ~ comma ~ transaction_id }
 
 action = _{ transaction | arbitration }

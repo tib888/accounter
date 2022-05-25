@@ -1,5 +1,7 @@
+pub mod account;
 pub mod actions;
 pub mod amount;
+pub mod ledger;
 
 use std::env;
 use std::fs::File;
@@ -18,7 +20,7 @@ extern crate pest_derive;
 #[grammar = "actions.pest"]
 struct ActionParser;
 
-#[derive(Debug, PartialEq, Clone, Copy, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd)]
 pub struct ClientId(u16);
 
 impl From<u16> for ClientId {
@@ -54,7 +56,7 @@ pub fn parse_from_csv(line: &str) -> Option<(ClientId, Action)> {
                 Rule::withdrawal => typ = Rule::withdrawal,
                 Rule::dispute => typ = Rule::dispute,
                 Rule::resolve => typ = Rule::resolve,
-                Rule::chargeback => typ = Rule::chargeback,
+                Rule::charge_back => typ = Rule::charge_back,
                 _ => {}
             };
         }
@@ -82,7 +84,7 @@ pub fn parse_from_csv(line: &str) -> Option<(ClientId, Action)> {
             }
             Rule::dispute => Some(Action::Dispute(TransactionId::from(tid))),
             Rule::resolve => Some(Action::Resolve(TransactionId::from(tid))),
-            Rule::chargeback => Some(Action::Chargeback(TransactionId::from(tid))),
+            Rule::charge_back => Some(Action::ChargeBack(TransactionId::from(tid))),
             _ => None,
         };
 

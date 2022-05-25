@@ -1,7 +1,7 @@
-/// Account related actions (IDs wrapped in newtype to avoid mixing them)
+/// Account related actions (IDs wrapped in new type to avoid mixing them)
 use crate::amount::Amount;
 
-#[derive(Debug, PartialEq, Clone, Copy, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd)]
 pub struct TransactionId(u32);
 
 impl From<u32> for TransactionId {
@@ -27,5 +27,5 @@ pub enum Action {
     Transact(TransactionData),
     Dispute(TransactionId),
     Resolve(TransactionId),
-    Chargeback(TransactionId),
+    ChargeBack(TransactionId),
 }
