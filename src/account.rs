@@ -213,9 +213,6 @@ impl Account {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use crate::actions::*;
-    // use crate::amount::*;
-    // use crate::ledger::*;
     use std::str::FromStr;
 
     fn deposit(account: &mut Account, id: u32, amount: &str, expected: Result<(), Error>) {

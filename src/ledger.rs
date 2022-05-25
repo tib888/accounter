@@ -14,6 +14,7 @@ pub trait Ledger {
     fn get(&self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error>;
 
     /// must always check if returned with success! (a real db could return Err<DbError>)
+    /// NOTE: if the network would lose the response of the server that is a big problem!!!
     #[must_use]
     fn insert(&mut self, key: Self::Key, state: Self::Value) -> Result<(), Self::Error>;
 }

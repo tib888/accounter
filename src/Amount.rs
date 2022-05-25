@@ -4,14 +4,14 @@
 /// + it is faster, more efficient to use fixed point calculations, than to work on decimals
 use rust_decimal::{prelude::ToPrimitive, Decimal};
 use std::fmt::Display;
-pub use std::str::FromStr;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 
 pub struct Amount(i64);
 
 impl Amount {
-    const FRACT: i64 = 10_000;
+    const FRACT: i64 = 10_000i64;
     const FRACT_DEC: Decimal = Decimal::from_parts(10_000, 0, 0, false, 0);
 
     pub const MAX: Amount = Amount(i64::MAX);
@@ -33,16 +33,19 @@ impl Amount {
 
 impl Display for Amount {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let wholes = self.0 / Amount::FRACT;
-        write!(f, "{wholes}").and_then(|()| {
-            let fraction = (self.0 % Amount::FRACT).abs() + Amount::FRACT;
-            if fraction != Amount::FRACT {
-                let s = format!("{fraction}");
-                write!(f, ".{}", &s.trim_end_matches('0')[1..])
-            } else {
-                Ok(())
-            }
-        })
+        if self.0 < 0 {
+            write!(f, "-")?;
+        }
+        let wholes = (self.0 / Amount::FRACT).abs();
+        write!(f, "{wholes}")?;
+
+        let fraction = (self.0 % Amount::FRACT).abs() + Amount::FRACT;
+        if fraction != Amount::FRACT {
+            let s = format!("{fraction}");
+            write!(f, ".{}", &s.trim_end_matches('0')[1..])
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -115,11 +118,49 @@ mod tests {
             "922337203685477.5807"
         );
         assert_eq!(format!("{}", Amount::from_str("0.0").unwrap()), "0");
+
         assert_eq!(format!("{}", Amount::from_str("1.1").unwrap()), "1.1");
         assert_eq!(format!("{}", Amount::from_str("1.01").unwrap()), "1.01");
         assert_eq!(format!("{}", Amount::from_str("1.001").unwrap()), "1.001");
         assert_eq!(format!("{}", Amount::from_str("1.0001").unwrap()), "1.0001");
         assert_eq!(format!("{}", Amount::from_str("1.00001").unwrap()), "1");
+
+        assert_eq!(format!("{}", Amount::from_str("+1.1").unwrap()), "1.1");
+        assert_eq!(format!("{}", Amount::from_str("+1.01").unwrap()), "1.01");
+        assert_eq!(format!("{}", Amount::from_str("+1.001").unwrap()), "1.001");
+        assert_eq!(
+            format!("{}", Amount::from_str("+1.0001").unwrap()),
+            "1.0001"
+        );
+        assert_eq!(format!("{}", Amount::from_str("+1.00001").unwrap()), "1");
+
+        assert_eq!(format!("{}", Amount::from_str("+0.1").unwrap()), "0.1");
+        assert_eq!(format!("{}", Amount::from_str("+0.01").unwrap()), "0.01");
+        assert_eq!(format!("{}", Amount::from_str("+0.001").unwrap()), "0.001");
+        assert_eq!(
+            format!("{}", Amount::from_str("+0.0001").unwrap()),
+            "0.0001"
+        );
+        assert_eq!(format!("{}", Amount::from_str("+0.00001").unwrap()), "0");
+
+        assert_eq!(format!("{}", Amount::from_str("-1.1").unwrap()), "-1.1");
+        assert_eq!(format!("{}", Amount::from_str("-1.01").unwrap()), "-1.01");
+        assert_eq!(format!("{}", Amount::from_str("-1.001").unwrap()), "-1.001");
+        assert_eq!(
+            format!("{}", Amount::from_str("-1.0001").unwrap()),
+            "-1.0001"
+        );
+        assert_eq!(format!("{}", Amount::from_str("-1.00001").unwrap()), "-1");
+
+        assert_eq!(format!("{}", Amount::from_str("-0.1").unwrap()), "-0.1");
+        assert_eq!(format!("{}", Amount::from_str("-0.01").unwrap()), "-0.01");
+        assert_eq!(format!("{}", Amount::from_str("-0.001").unwrap()), "-0.001");
+        assert_eq!(
+            format!("{}", Amount::from_str("-0.0001").unwrap()),
+            "-0.0001"
+        );
+        assert_eq!(format!("{}", Amount::from_str("-0.00001").unwrap()), "0");
+
         assert_eq!(
             format!("{}", Amount::from_str("1.00011").unwrap()),
             "1.0001"

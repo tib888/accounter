@@ -1,12 +1,12 @@
 comma = _{ "," }
 id = _{ ASCII_DIGIT+ }
 
-wholes = {ASCII_DIGIT+}
-fraction = { ASCII_DIGIT{1,4} }
 sign = { "+"|"-" }
-decimal = @{ sign? ~ ((wholes ~ ("." ~ fraction)?) | ("." ~ fraction)) }
+decimal = @{ sign? ~ ((ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)?) | ("." ~ ASCII_DIGIT+)) }
 
-tail = _{ (ANY)* }
+//comment_separator = _{ comma | "//" }
+comment_separator = _{ comma }
+comment = @{ comment_separator ~ (ANY)* }
 
 client_id = ${ id }
 transaction_id = ${ id }
@@ -25,6 +25,6 @@ arbitration = _{ arbitration_type ~ comma ~ client_id ~ comma ~ transaction_id }
 
 action = _{ transaction | arbitration }
 
-line_input = _{ SOI ~ action ~ tail ~ EOI }
+line_input = _{ SOI ~ action ~ comment? ~ EOI }
 
 WHITESPACE = _{ " " | "\t" }
