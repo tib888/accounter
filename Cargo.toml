@@ -8,3 +8,7 @@ authors = ["Tibor Prokai"]
 rust_decimal = "1.23"
 pest = "2.1"
 pest_derive = "2.1"
+
+[features]
+default = ["error-print"] 
+error-print = []

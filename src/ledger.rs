@@ -24,9 +24,10 @@ pub enum TransactionState {
     Deposit(Amount),
     DepositInDispute(Amount),
     ChargedBack(Amount),
-    //InDisputeWithdrawal(Amount),  //TODO ASK! (Blog 1.)
-    Withdrawal(Amount), //TODO ASK! if Withdrawal dispute is not possible, this could be omitted, but in that case restore from db by transaction replay would not be possible...
+    //InDisputeWithdrawal(Amount),  //TODO ASK!
+    Withdrawal(Amount), //TODO ASK! if Withdrawal dispute is not possible, this could be omitted, but in that case restore from db by transaction replay would not be possible, so I leave it here...
 }
+
 //Hopefully this fits in memory, but persistent storage would be better (Vec would use less memory, but slow, allocated in one large block)
 pub struct InMemoryLedger {
     db: HashMap<TransactionId, TransactionState>,

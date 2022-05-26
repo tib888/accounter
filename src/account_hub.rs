@@ -1,19 +1,19 @@
 /// This hub has two main purpose:
 /// * it is the owner of all Accounts, does lifetime management
 /// * it is responsible to forward requests to the right Account actor
-use std::cmp::{Ord, Ordering};
-use std::collections::BTreeMap;
-use std::fmt::Display;
-use std::io::BufRead;
-use std::io::Write;
-use std::str::FromStr;
-
-use pest::Parser;
-
 use crate::account::*;
 use crate::actions::Action;
 use crate::actions::*;
 use crate::amount::Amount;
+use std::io::{BufRead, Write};
+
+use std::cmp::{Ord, Ordering};
+use std::collections::BTreeMap;
+use std::fmt::Display;
+
+use std::str::FromStr;
+
+use pest::Parser;
 
 /// used to address the Accounts managed accounts
 #[derive(Debug, PartialEq, Clone, Copy, Eq, PartialOrd)]
@@ -59,7 +59,7 @@ impl AccountHub {
         }
     }
 
-    pub fn execute(&mut self, client_id: ClientId, action: Action) -> Result<(), Error> {
+    pub fn execute(&mut self, client_id: ClientId, action: Action) -> Result<(), TransactionError> {
         self.accounts
             .entry(client_id)
             .or_insert((self.account_factory)(client_id))
@@ -70,13 +70,19 @@ impl AccountHub {
         for line in reader.lines() {
             if let Ok(line) = &line {
                 if let Some((client_id, action)) = parse_from_csv(&line) {
-                    let _err = self.execute(client_id, action);
+                    if let Err(_err) = self.execute(client_id, action) {
+                        #[cfg(feature = "error-print")]
+                        eprint!("Transaction refused: \"{line}\" -- error: {:?}\n", _err);
+                    }
+                } else {
+                    #[cfg(feature = "error-print")]
+                    eprint!("Record skipped due to syntax error: \"{line}\"\n");
                 }
             }
         }
     }
 
-    pub fn print_summary(&self, writer: &mut impl Write) -> Result<(), std::io::Error> {
+    pub fn write_summary(&self, writer: &mut impl Write) -> Result<(), std::io::Error> {
         write!(writer, "client,available,held,total,locked\n").and_then(|()| {
             for item in &self.accounts {
                 let client = item.0;
@@ -151,12 +157,7 @@ mod tests {
     use super::*;
     use crate::ledger::*;
 
-    #[test]
-    fn full_integration_test() {
-        let mut accounts =
-            AccountHub::new(|_client_id| Account::new(Box::new(InMemoryLedger::new())));
-        let text = r###"
-type,   client, tx, amount
+    const INPUT: &[u8] = br###"type,   client, tx, amount
 deposit, 1, 1, 1.0,
 deposit,1, 2, 2    
 deposit, 1, 3, .30 
@@ -247,18 +248,21 @@ chargeback, 1, 1
 
 dispute, 2, 5,
 "###;
-        accounts.process_csv(text.as_bytes());
-        let mut buff = Vec::<u8>::new();
-        let _err = accounts.print_summary(&mut buff);
-        assert_eq!(
-            buff,
-            r###"client,available,held,total,locked
+
+    const OUTPUT: &[u8] = br###"client,available,held,total,locked
 1, -0.8, 0, -0.8, true
 2, 15, 5, 20, false
 10, 922337203685477.5807, 0, 922337203685477.5807, false
 50, 196.124, 0, 196.124, true
-"###
-            .as_bytes()
-        );
+"###;
+
+    #[test]
+    fn full_integration_test() {
+        let mut accounts =
+            AccountHub::new(|_client_id| Account::new(Box::new(InMemoryLedger::new())));
+        accounts.process_csv(INPUT);
+        let mut buff = Vec::<u8>::new();
+        let _err = accounts.write_summary(&mut buff);
+        assert_eq!(buff, OUTPUT);
     }
 }

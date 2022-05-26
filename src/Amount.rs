@@ -33,18 +33,27 @@ impl Amount {
 
 impl Display for Amount {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if self.0 < 0 {
-            write!(f, "-")?;
-        }
-        let wholes = (self.0 / Amount::FRACT).abs();
-        write!(f, "{wholes}")?;
-
-        let fraction = (self.0 % Amount::FRACT).abs() + Amount::FRACT;
-        if fraction != Amount::FRACT {
-            let s = format!("{fraction}");
-            write!(f, ".{}", &s.trim_end_matches('0')[1..])
+        if self.0 == 0 {
+            write!(f, "0")
+        } else if self.0 >= Amount::FRACT || self.0 <= -Amount::FRACT {
+            let s = format!("{}", self.0);
+            let l = s.len();
+            write!(f, "{}", &s[0..l - 4])?;
+            let fract = &s[l - 4..l].trim_end_matches('0');
+            if fract.len() > 0 {
+                write!(f, ".{}", fract)
+            } else {
+                Ok(())
+            }
         } else {
-            Ok(())
+            let s = format!("{}", self.0.abs() + Amount::FRACT);
+            let l = s.len();
+            if self.0 > 0 {
+                write!(f, "0.")?;
+            } else {
+                write!(f, "-0.")?;
+            };
+            write!(f, "{}", s[l - 4..l].trim_end_matches('0'))
         }
     }
 }
