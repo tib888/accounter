@@ -1,4 +1,4 @@
-Development 'blog' (see also the "//TODO ASK!" comment is ne code.):
+Development 'blog' (see also the "//TODO ASK!" comments in the code):
 
 0. ASSUMPTION: No need to check file header. 
    ASSUMPTION: Wrong records can be skipped without exiting with error.
