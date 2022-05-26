@@ -8,6 +8,8 @@ authors = ["Tibor Prokai"]
 rust_decimal = "1.23"
 pest = "2.1"
 pest_derive = "2.1"
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "io-util", "fs", "io-std", "macros"] }
 
 [features]
 default = ["error-print"] 

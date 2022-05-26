@@ -82,11 +82,11 @@ impl Account {
 
     /// Deposit/Withdraw funds to/from the account
     /// REQUIRES: unique TransactionIds (guaranteed in specification)
-    fn transact(&mut self, data: TransactionData) -> Result<(), TransactionError> {
+    async fn transact(&mut self, data: TransactionData) -> Result<(), TransactionError> {
         if self.is_locked() {
             return Err(TransactionError::AccountLocked); //TODO ASK! should we allow deposit in this case?
         }
-        match self.ledger.contains(data.id) //this check is theoretically not needed (unique TransactionIds guaranteed in specification)
+        match self.ledger.contains(data.id).await //this check is theoretically not needed (unique TransactionIds guaranteed in specification)
         {
             Ok(true) => { return Err(TransactionError::RepeatedTransactionId); }
             Err(_) => { return Err(TransactionError::DbError) }
@@ -101,6 +101,7 @@ impl Account {
                 if let Some(new_total) = Amount::checked_add(self.total, amount) {
                     self.ledger
                         .insert(data.id, TransactionState::Deposit(amount))
+                        .await
                         .and_then(|_| {
                             self.total = new_total;
                             Ok(()) //return success only if the ledger logged the transaction and everything was perfect!
@@ -117,6 +118,7 @@ impl Account {
                 if let Some(new_total) = Amount::checked_sub(self.total, amount) {
                     self.ledger
                         .insert(data.id, TransactionState::Withdrawal(amount))
+                        .await
                         .and_then(|_| {
                             self.total = new_total;
                             Ok(()) //return success only if the ledger logged the transaction and everything was perfect!
@@ -133,8 +135,8 @@ impl Account {
     /// dispute represents a client's claim that a transaction was erroneous and
     /// should be reversed. The funds associated with this transaction should be
     /// held back from usage until the dispute resolution/charge back
-    fn start_dispute(&mut self, id: TransactionId) -> Result<(), TransactionError> {
-        match self.ledger.get(id) {
+    async fn start_dispute(&mut self, id: TransactionId) -> Result<(), TransactionError> {
+        match self.ledger.get(id).await {
             Err(_) => Err(TransactionError::DbError),
             Ok(None) => Err(TransactionError::InvalidTransactionId),
             Ok(Some(state)) => match state {
@@ -145,6 +147,7 @@ impl Account {
                     if let Some(new_held) = Amount::checked_add(self.held, amount) {
                         self.ledger
                             .insert(id, TransactionState::DepositInDispute(amount))
+                            .await
                             .and_then(|_| {
                                 self.held = new_held;
                                 Ok(())
@@ -159,9 +162,9 @@ impl Account {
     }
 
     /// A resolve represents a resolution to a dispute, releasing the associated held funds
-    fn resolve_dispute(&mut self, id: TransactionId) -> Result<(), TransactionError> {
+    async fn resolve_dispute(&mut self, id: TransactionId) -> Result<(), TransactionError> {
         //only open disputes can be resolved!
-        match self.ledger.get(id) {
+        match self.ledger.get(id).await {
             Err(_) => Err(TransactionError::DbError),
             Ok(None) => Err(TransactionError::InvalidTransactionId),
             Ok(Some(state)) => match state {
@@ -172,6 +175,7 @@ impl Account {
                     if let Some(new_held) = Amount::checked_sub(self.held, amount) {
                         self.ledger
                             .insert(id, TransactionState::Deposit(amount))
+                            .await
                             .and_then(|_| {
                                 self.held = new_held;
                                 Ok(())
@@ -190,12 +194,12 @@ impl Account {
     /// NOTE: if the amount of transaction is greater than the total,
     /// total will be zeroed, and the missing amount will stay in held
     /// (based on these negative available amount will be returned in Err)
-    fn resolve_dispute_with_charge_back(
+    async fn resolve_dispute_with_charge_back(
         &mut self,
         id: TransactionId,
     ) -> Result<(), TransactionError> {
         //protect against repeated charge backs:
-        match self.ledger.get(id) {
+        match self.ledger.get(id).await {
             Err(_) => Err(TransactionError::DbError),
             Ok(None) => Err(TransactionError::InvalidTransactionId),
             Ok(Some(state)) => match state {
@@ -209,6 +213,7 @@ impl Account {
                     ) {
                         self.ledger
                             .insert(id, TransactionState::ChargedBack(amount))
+                            .await
                             .and_then(|_| {
                                 self.locked = true;
                                 self.total = new_total;
@@ -227,12 +232,12 @@ impl Account {
     /// The execution order of the transactions must be kept
     /// (Out of order transaction processing must NOT be used!)
     /// Concurrent transaction processing is also forbidden!
-    pub fn execute(&mut self, action: Action) -> Result<(), TransactionError> {
+    pub async fn execute(&mut self, action: Action) -> Result<(), TransactionError> {
         match action {
-            Action::Transact(data) => self.transact(data),
-            Action::Dispute(id) => self.start_dispute(id),
-            Action::Resolve(id) => self.resolve_dispute(id),
-            Action::ChargeBack(id) => self.resolve_dispute_with_charge_back(id),
+            Action::Transact(data) => self.transact(data).await,
+            Action::Dispute(id) => self.start_dispute(id).await,
+            Action::Resolve(id) => self.resolve_dispute(id).await,
+            Action::ChargeBack(id) => self.resolve_dispute_with_charge_back(id).await,
         }
     }
 }
@@ -242,51 +247,61 @@ mod tests {
     use super::*;
     use std::str::FromStr;
 
-    fn deposit(
+    async fn deposit(
         account: &mut Account,
         id: u32,
         amount: &str,
         expected: Result<(), TransactionError>,
     ) {
         assert_eq!(
-            account.execute(Action::Transact(TransactionData {
-                id: TransactionId::from(id),
-                transaction: Transaction::Deposit(Amount::from_str(amount).unwrap())
-            })),
+            account
+                .execute(Action::Transact(TransactionData {
+                    id: TransactionId::from(id),
+                    transaction: Transaction::Deposit(Amount::from_str(amount).unwrap())
+                }))
+                .await,
             expected
         );
     }
 
-    fn withdraw(
+    async fn withdraw(
         account: &mut Account,
         id: u32,
         amount: &str,
         expected: Result<(), TransactionError>,
     ) {
         assert_eq!(
-            account.execute(Action::Transact(TransactionData {
-                id: TransactionId::from(id),
-                transaction: Transaction::Withdrawal(Amount::from_str(amount).unwrap())
-            })),
+            account
+                .execute(Action::Transact(TransactionData {
+                    id: TransactionId::from(id),
+                    transaction: Transaction::Withdrawal(Amount::from_str(amount).unwrap())
+                }))
+                .await,
             expected
         );
     }
 
-    fn dispute(account: &mut Account, id: u32, expected: Result<(), TransactionError>) {
+    async fn dispute(account: &mut Account, id: u32, expected: Result<(), TransactionError>) {
         assert_eq!(
-            account.execute(Action::Dispute(TransactionId::from(id))),
+            account
+                .execute(Action::Dispute(TransactionId::from(id)))
+                .await,
             expected
         );
     }
-    fn resolve(account: &mut Account, id: u32, expected: Result<(), TransactionError>) {
+    async fn resolve(account: &mut Account, id: u32, expected: Result<(), TransactionError>) {
         assert_eq!(
-            account.execute(Action::Resolve(TransactionId::from(id))),
+            account
+                .execute(Action::Resolve(TransactionId::from(id)))
+                .await,
             expected
         );
     }
-    fn charge_back(account: &mut Account, id: u32, expected: Result<(), TransactionError>) {
+    async fn charge_back(account: &mut Account, id: u32, expected: Result<(), TransactionError>) {
         assert_eq!(
-            account.execute(Action::ChargeBack(TransactionId::from(id))),
+            account
+                .execute(Action::ChargeBack(TransactionId::from(id)))
+                .await,
             expected
         );
     }
@@ -304,155 +319,161 @@ mod tests {
         assert_eq!(account.is_locked(), locked);
     }
 
-    #[test]
-    fn starting_from_zero() {
+    #[tokio::test]
+    async fn starting_from_zero() {
         let account = Account::new(Box::new(InMemoryLedger::new()));
         assert_eq!(account.available(), Amount::ZERO);
         assert_eq!(account.total(), Amount::ZERO);
         assert_eq!(account.held(), Amount::ZERO);
     }
 
-    #[test]
-    fn deposit_sum_up() {
+    #[tokio::test]
+    async fn deposit_sum_up() {
         let mut account = Account::new(Box::new(InMemoryLedger::new()));
         let amount1 = "1234567890.1234";
         let amount2 = "1.2";
         let amount3 = "1234567891.3234";
-        deposit(&mut account, 0, amount1, Ok(()));
-        deposit(&mut account, 1, "0", Err(TransactionError::InvalidAmount));
-        deposit(&mut account, 2, "-1", Err(TransactionError::InvalidAmount));
+        deposit(&mut account, 0, amount1, Ok(())).await;
+        deposit(&mut account, 1, "0", Err(TransactionError::InvalidAmount)).await;
+        deposit(&mut account, 2, "-1", Err(TransactionError::InvalidAmount)).await;
         expect_balance(&mut account, amount1, amount1, "0", false);
-        deposit(&mut account, 3, amount2, Ok(()));
+        deposit(&mut account, 3, amount2, Ok(())).await;
         expect_balance(&mut account, amount3, amount3, "0", false);
         deposit(
             &mut account,
             4,
             "0.00001",
             Err(TransactionError::InvalidAmount),
-        );
+        )
+        .await;
         expect_balance(&mut account, amount3, amount3, "0", false);
         deposit(
             &mut account,
             5,
             "922337203685477.5807",
             Err(TransactionError::WouldOverFlow),
-        );
+        )
+        .await;
         expect_balance(&mut account, amount3, amount3, "0", false);
-        dispute(&mut account, 6, Err(TransactionError::InvalidTransactionId));
+        dispute(&mut account, 6, Err(TransactionError::InvalidTransactionId)).await;
     }
 
-    #[test]
-    fn withdrawals() {
+    #[tokio::test]
+    async fn withdrawals() {
         let mut account = Account::new(Box::new(InMemoryLedger::new()));
-        deposit(&mut account, 1, "0.1", Ok(()));
+        deposit(&mut account, 1, "0.1", Ok(())).await;
         withdraw(
             &mut account,
             2,
             "-0.0001",
             Err(TransactionError::InvalidAmount),
-        );
-        withdraw(&mut account, 3, "0", Err(TransactionError::InvalidAmount));
-        withdraw(&mut account, 4, "1", Err(TransactionError::InvalidAmount));
+        )
+        .await;
+        withdraw(&mut account, 3, "0", Err(TransactionError::InvalidAmount)).await;
+        withdraw(&mut account, 4, "1", Err(TransactionError::InvalidAmount)).await;
         expect_balance(&mut account, "0.1", "0.1", "0", false);
-        withdraw(&mut account, 5, "0.1", Ok(()));
+        withdraw(&mut account, 5, "0.1", Ok(())).await;
         expect_balance(&mut account, "0", "0", "0", false);
 
-        withdraw(&mut account, 6, "1", Err(TransactionError::InvalidAmount));
+        withdraw(&mut account, 6, "1", Err(TransactionError::InvalidAmount)).await;
         expect_balance(&mut account, "0", "0", "0", false);
 
-        deposit(&mut account, 7, "100", Ok(()));
+        deposit(&mut account, 7, "100", Ok(())).await;
         expect_balance(&mut account, "100", "100", "0", false);
 
-        withdraw(&mut account, 9, "5", Ok(()));
+        withdraw(&mut account, 9, "5", Ok(())).await;
         expect_balance(&mut account, "95", "95", "0", false);
-        withdraw(&mut account, 10, "99", Err(TransactionError::InvalidAmount));
+        withdraw(&mut account, 10, "99", Err(TransactionError::InvalidAmount)).await;
         expect_balance(&mut account, "95", "95", "0", false);
 
-        deposit(&mut account, 11, "200.124", Ok(()));
+        deposit(&mut account, 11, "200.124", Ok(())).await;
         expect_balance(&mut account, "295.124", "295.124", "0", false);
     }
 
-    #[test]
-    fn disputes() {
+    #[tokio::test]
+    async fn disputes() {
         let mut account = Account::new(Box::new(InMemoryLedger::new()));
-        withdraw(&mut account, 1, "0", Err(TransactionError::InvalidAmount));
-        withdraw(&mut account, 2, "1", Err(TransactionError::InvalidAmount));
+        withdraw(&mut account, 1, "0", Err(TransactionError::InvalidAmount)).await;
+        withdraw(&mut account, 2, "1", Err(TransactionError::InvalidAmount)).await;
 
-        deposit(&mut account, 3, "100", Ok(()));
-        withdraw(&mut account, 4, "0", Err(TransactionError::InvalidAmount));
-        withdraw(&mut account, 5, "5", Ok(()));
-        withdraw(&mut account, 6, "99", Err(TransactionError::InvalidAmount));
+        deposit(&mut account, 3, "100", Ok(())).await;
+        withdraw(&mut account, 4, "0", Err(TransactionError::InvalidAmount)).await;
+        withdraw(&mut account, 5, "5", Ok(())).await;
+        withdraw(&mut account, 6, "99", Err(TransactionError::InvalidAmount)).await;
 
-        deposit(&mut account, 7, "200", Ok(()));
-        withdraw(&mut account, 8, "290", Ok(()));
+        deposit(&mut account, 7, "200", Ok(())).await;
+        withdraw(&mut account, 8, "290", Ok(())).await;
 
-        deposit(&mut account, 9, "1", Ok(()));
+        deposit(&mut account, 9, "1", Ok(())).await;
 
         expect_balance(&mut account, "6", "6", "0", false);
-        resolve(&mut account, 3, Err(TransactionError::DisputeNotOpenedYet));
+        resolve(&mut account, 3, Err(TransactionError::DisputeNotOpenedYet)).await;
         expect_balance(&mut account, "6", "6", "0", false);
-        charge_back(&mut account, 3, Err(TransactionError::DisputeNotOpenedYet));
+        charge_back(&mut account, 3, Err(TransactionError::DisputeNotOpenedYet)).await;
         expect_balance(&mut account, "6", "6", "0", false);
-        dispute(&mut account, 9, Ok(())); //-1
+        dispute(&mut account, 9, Ok(())).await; //-1
         expect_balance(&mut account, "5", "6", "1", false);
-        dispute(&mut account, 7, Ok(())); //-200
+        dispute(&mut account, 7, Ok(())).await; //-200
         expect_balance(&mut account, "-195", "6", "201", false);
-        dispute(&mut account, 9, Err(TransactionError::AlreadyInDispute)); //1
+        dispute(&mut account, 9, Err(TransactionError::AlreadyInDispute)).await; //1
         expect_balance(&mut account, "-195", "6", "201", false);
-        resolve(&mut account, 7, Ok(())); //+200
+        resolve(&mut account, 7, Ok(())).await; //+200
         expect_balance(&mut account, "5", "6", "1", false);
 
-        charge_back(&mut account, 7, Err(TransactionError::DisputeNotOpenedYet));
+        charge_back(&mut account, 7, Err(TransactionError::DisputeNotOpenedYet)).await;
         expect_balance(&mut account, "5", "6", "1", false);
-        resolve(&mut account, 7, Err(TransactionError::DisputeNotOpenedYet));
+        resolve(&mut account, 7, Err(TransactionError::DisputeNotOpenedYet)).await;
         expect_balance(&mut account, "5", "6", "1", false);
-        dispute(&mut account, 7, Ok(())); //-200
+        dispute(&mut account, 7, Ok(())).await; //-200
         expect_balance(&mut account, "-195", "6", "201", false);
-        charge_back(&mut account, 7, Ok(()));
+        charge_back(&mut account, 7, Ok(())).await;
         expect_balance(&mut account, "-195", "-194", "1", true);
-        charge_back(&mut account, 7, Err(TransactionError::AlreadyChargedBack));
+        charge_back(&mut account, 7, Err(TransactionError::AlreadyChargedBack)).await;
         expect_balance(&mut account, "-195", "-194", "1", true);
         deposit(
             &mut account,
             11,
             "200",
             Err(TransactionError::AccountLocked),
-        ); //TODO ASK! - I think we should allow this
+        )
+        .await; //TODO ASK! - I think we should allow this
         expect_balance(&mut account, "-195", "-194", "1", true);
-        withdraw(&mut account, 12, "1", Err(TransactionError::AccountLocked));
+        withdraw(&mut account, 12, "1", Err(TransactionError::AccountLocked)).await;
         expect_balance(&mut account, "-195", "-194", "1", true);
-        dispute(&mut account, 7, Err(TransactionError::AlreadyChargedBack)); //-200
+        dispute(&mut account, 7, Err(TransactionError::AlreadyChargedBack)).await; //-200
         expect_balance(&mut account, "-195", "-194", "1", true);
     }
 
-    #[test]
-    fn disputes2() {
+    #[tokio::test]
+    async fn disputes2() {
         let mut account = Account::new(Box::new(InMemoryLedger::new()));
-        deposit(&mut account, 3, "100", Ok(()));
-        withdraw(&mut account, 4, "0", Err(TransactionError::InvalidAmount));
-        withdraw(&mut account, 5, "5", Ok(()));
-        withdraw(&mut account, 6, "99", Err(TransactionError::InvalidAmount));
+        deposit(&mut account, 3, "100", Ok(())).await;
+        withdraw(&mut account, 4, "0", Err(TransactionError::InvalidAmount)).await;
+        withdraw(&mut account, 5, "5", Ok(())).await;
+        withdraw(&mut account, 6, "99", Err(TransactionError::InvalidAmount)).await;
 
-        deposit(&mut account, 7, "200", Ok(()));
-        withdraw(&mut account, 8, "290", Ok(()));
+        deposit(&mut account, 7, "200", Ok(())).await;
+        withdraw(&mut account, 8, "290", Ok(())).await;
 
         deposit(
             &mut account,
             8,
             "1",
             Err(TransactionError::RepeatedTransactionId),
-        );
-        deposit(&mut account, 9, "1", Ok(()));
+        )
+        .await;
+        deposit(&mut account, 9, "1", Ok(())).await;
 
         expect_balance(&mut account, "6", "6", "0", false);
-        dispute(&mut account, 2, Err(TransactionError::InvalidTransactionId));
+        dispute(&mut account, 2, Err(TransactionError::InvalidTransactionId)).await;
         expect_balance(&mut account, "6", "6", "0", false);
 
         dispute(
             &mut account,
             5,
             Err(TransactionError::InvalidTransactionType),
-        ); //TODO ASK! - Is it possible to dispute a withdrawal?
+        )
+        .await; //TODO ASK! - Is it possible to dispute a withdrawal?
         expect_balance(&mut account, "6", "6", "0", false);
     }
 }

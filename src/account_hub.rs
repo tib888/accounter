@@ -5,7 +5,9 @@ use crate::account::*;
 use crate::actions::Action;
 use crate::actions::*;
 use crate::amount::{Amount, ParseError};
-use std::io::{BufRead, Write};
+
+use std::io::Write;
+use tokio::io::AsyncBufReadExt;
 
 use std::cmp::{Ord, Ordering};
 use std::collections::BTreeMap;
@@ -65,11 +67,16 @@ impl AccountHub {
     /// forward the given action request message to the account addressed by client_id
     /// if it not exist yet a new account is created automatically by the lambda function
     /// passed to the AccountHub::new
-    pub fn execute(&mut self, client_id: ClientId, action: Action) -> Result<(), TransactionError> {
+    pub async fn execute(
+        &mut self,
+        client_id: ClientId,
+        action: Action,
+    ) -> Result<(), TransactionError> {
         self.accounts
             .entry(client_id)
             .or_insert((self.account_creator)(client_id))
             .execute(action)
+            .await
     }
 
     /// processes the lines of a csv file
@@ -77,21 +84,24 @@ impl AccountHub {
     /// just like any other lines with parse error
     /// executes the transactions given in well formed lines
     /// if "error-print" feature is enabled, failures are logged on stderr
-    pub fn process_csv(&mut self, reader: impl BufRead) {
-        for line in reader.lines() {
-            if let Ok(line) = &line {
-                match parse_csv_line(&line) {
-                    Ok((client_id, action)) => {
-                        if let Err(_err) = self.execute(client_id, action) {
-                            #[cfg(feature = "error-print")]
-                            eprint!("Transaction refused: \"{line}\" -- Error: {}\n", _err);
-                        }
-                    }
-
-                    Err(_err) => {
+    pub async fn process_csv<R>(&mut self, reader: R)
+    where
+        R: AsyncBufReadExt + Unpin,
+    {
+        let mut lines = reader.lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            match parse_csv_line(&line) {
+                Ok((client_id, action)) => {
+                    if let Err(_err) = self.execute(client_id, action).await {
                         #[cfg(feature = "error-print")]
-                        eprint!("Record skipped due to \"{_err}\" in \"{line}\"\n");
+                        eprint!("Transaction refused: \"{line}\" -- Error: {}\n", _err);
+                        //TODO async log!
                     }
+                }
+                Err(_err) => {
+                    #[cfg(feature = "error-print")]
+                    eprint!("Record skipped due to \"{_err}\" in \"{line}\"\n");
+                    //TODO async log!
                 }
             }
         }
@@ -275,11 +285,11 @@ dispute, 2, 5,
 50, 196.124, 0, 196.124, true
 "###;
 
-    #[test]
-    fn full_integration_test() {
+    #[tokio::test]
+    async fn full_integration_test() {
         let mut accounts =
             AccountHub::new(|_client_id| Account::new(Box::new(InMemoryLedger::new())));
-        accounts.process_csv(INPUT);
+        accounts.process_csv(INPUT).await;
         let mut buff = Vec::<u8>::new();
         let _err = accounts.write_summary(&mut buff);
         assert_eq!(buff, OUTPUT);

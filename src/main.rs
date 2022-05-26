@@ -11,8 +11,7 @@ use crate::ledger::InMemoryLedger;
 use std::env;
 use std::process;
 
-use std::fs::File;
-use std::io::BufReader;
+use tokio::fs::File;
 
 #[macro_use]
 extern crate pest_derive;
@@ -25,22 +24,30 @@ fn main() {
         process::exit(1);
     }
     let filename = &args[1];
-    match File::open(filename) {
-        Ok(file) => {
-            let reader = BufReader::new(file);
-            let mut accounts =
-                AccountHub::new(|_client_id| Account::new(Box::new(InMemoryLedger::new())));
-            accounts.process_csv(reader);
-            if let Err(_err) = accounts.write_summary(&mut std::io::stdout()) {
-                #[cfg(feature = "error-print")]
-                eprint!("Error: {_err}\n");
-                process::exit(3);
+
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        match File::open(filename).await {
+            Ok(file) => {
+                let mut accounts =
+                    AccountHub::new(|_client_id| Account::new(Box::new(InMemoryLedger::new())));
+
+                let capacity = 0x1000;
+                let reader = tokio::io::BufReader::with_capacity(capacity, file);
+
+                accounts.process_csv(reader).await;
+
+                // makes not much sense to convert write_summary to async
+                if let Err(_err) = accounts.write_summary(&mut std::io::stdout()) {
+                    #[cfg(feature = "error-print")]
+                    eprint!("Error: {_err}\n");
+                    process::exit(3);
+                }
             }
-        }
-        Err(_err) => {
-            #[cfg(feature = "error-print")]
-            eprint!("Error: {_err} \"{filename}\"\n");
-            process::exit(2);
-        }
-    };
+            Err(_err) => {
+                #[cfg(feature = "error-print")]
+                eprint!("Error: {_err} \"{filename}\"\n"); //TODO async log!
+                process::exit(2);
+            }
+        };
+    });
 }

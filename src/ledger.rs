@@ -1,26 +1,29 @@
 use crate::actions::TransactionId;
 use crate::amount::Amount;
+use async_trait::async_trait;
 use std::collections::HashMap;
 
 /// abstraction over a key-value pair storage
+#[async_trait]
 pub trait Ledger {
     type Error;
     type Key;
     type Value;
 
     /// returns true if the given key is already in the storage (or error)
-    fn contains(&self, key: Self::Key) -> Result<bool, Self::Error> {
-        self.get(key).map(|_| true)
-    }
+    async fn contains(&self, key: Self::Key) -> Result<bool, Self::Error>;
+    // {
+    //     self.get(key).map(|_| true)
+    // }
 
     /// returns value for given key is already in the storage (or error)
-    fn get(&self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error>;
+    async fn get(&self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error>;
 
     /// inserts/updates the value in the storage belongs to the given key (or error)
     /// must always check if returned with success! (a real db could return Err<DbError>)
     /// NOTE: if the network would lose the response of the server that is a big problem!!!
     #[must_use]
-    fn insert(&mut self, key: Self::Key, state: Self::Value) -> Result<(), Self::Error>;
+    async fn insert(&mut self, key: Self::Key, state: Self::Value) -> Result<(), Self::Error>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -50,17 +53,18 @@ impl InMemoryLedger {
     }
 }
 
+#[async_trait]
 impl Ledger for InMemoryLedger {
     type Error = ();
     type Key = TransactionId;
     type Value = TransactionState;
 
-    fn contains(&self, key: Self::Key) -> Result<bool, Self::Error> {
+    async fn contains(&self, key: Self::Key) -> Result<bool, Self::Error> {
         //real db could return Err<DbError>
         Ok(self.db.contains_key(&key))
     }
 
-    fn get(&self, key: Self::Key) -> Result<Option<TransactionState>, Self::Error> {
+    async fn get(&self, key: Self::Key) -> Result<Option<TransactionState>, Self::Error> {
         //real db could return Err<DbError>
         Ok(self.db.get(&key).map(|v| *v))
     }
@@ -68,7 +72,7 @@ impl Ledger for InMemoryLedger {
     /// must always check if returned with success!
     /// (a real db could return Err<DbError>)
     #[must_use]
-    fn insert(&mut self, key: Self::Key, state: TransactionState) -> Result<(), Self::Error> {
+    async fn insert(&mut self, key: Self::Key, state: TransactionState) -> Result<(), Self::Error> {
         self.db.insert(key, state);
         Ok(())
     }
