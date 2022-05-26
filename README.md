@@ -1,5 +1,9 @@
 Development 'blog' (see also the "//TODO ASK!" comments in the code):
 
+In test_explained.csv I tried to collect all possible problems the input file may have.
+transactions.csv is created from that without the comments.
+A unit test is also created base on this: account_hub.rs / full_integration_test
+
 0. ASSUMPTION: No need to check file header. 
    ASSUMPTION: Wrong records can be skipped without exiting with error.
    ASSUMPTION: More items in a record than need is fine - those are skipped. 

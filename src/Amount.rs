@@ -1,13 +1,17 @@
-/// Amount is a new type which represent funds.
-/// Any arithmetics with it must be carefully thought so the usual operators are not implemented, just checked ones
-/// Amount chosen not to be 'Decimal' based on the assumption that no more than 2^63/10000-1 units expected per transaction (or even in one account balance)
-/// + it is faster, more efficient to use fixed point calculations, than to work on decimals
 use rust_decimal::{prelude::ToPrimitive, Decimal};
+use std::error::Error;
+use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 
+/// Amount is a new type which represent funds.
+/// Any arithmetics with it must be carefully thought so the usual operators are not implemented, just checked ones.
+/// Amount chosen not to be 'Decimal' based on the assumption that no more than 2^63/10000-1 units expected
+/// per transaction (or even in one account balance)
+/// it is using fixed point arithmetics with 4 digits precision, on a 64bit signed integer
+/// this way faster, more memory efficient, than to work on decimals
 pub struct Amount(i64);
 
 impl Amount {
@@ -60,6 +64,14 @@ impl Display for Amount {
 
 #[derive(Debug, PartialEq)]
 pub struct ParseError;
+
+impl Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "parse error")
+    }
+}
+
+impl Error for ParseError {}
 
 impl FromStr for Amount {
     type Err = ParseError;

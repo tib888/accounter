@@ -1,3 +1,6 @@
+use std::error::Error;
+use std::fmt;
+
 use crate::actions::*;
 use crate::amount::*;
 use crate::ledger::*;
@@ -14,8 +17,29 @@ pub enum TransactionError {
     InvalidTransactionType, //based on assumption that withdrawals can not be disputed
     RepeatedTransactionId, //this check is theoretically not needed (unique TransactionIds guaranteed in specification)
     DbError,               //a ledger real DB would have possible access errors
-    Unexpected,
+    Unexpected,            //this should have never happened
 }
+
+impl fmt::Display for TransactionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let description = match self {
+            TransactionError::AccountLocked => "try to access locked account",
+            TransactionError::InvalidAmount => "zero or negative transaction amount",
+            TransactionError::WouldOverFlow => "can not book that much amount",
+            TransactionError::DisputeNotOpenedYet => "resolve/charge back needs open dispute first",
+            TransactionError::AlreadyInDispute => "a dispute already opened with the given transaction id",
+            TransactionError::AlreadyChargedBack => "already charged back",
+            TransactionError::InvalidTransactionId => "there is no such transaction in the ledger",
+            TransactionError::InvalidTransactionType => "based on assumption that withdrawals can not be disputed",
+            TransactionError::RepeatedTransactionId => "this check is theoretically not needed (unique TransactionIds guaranteed in specification)",
+            TransactionError::DbError => "a ledger real DB would have possible access errors",
+            TransactionError::Unexpected => "this should have never happened",
+        };
+        write!(f, "{:?} ({description})", self)
+    }
+}
+
+impl Error for TransactionError {}
 
 pub struct Account {
     total: Amount,

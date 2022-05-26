@@ -1,5 +1,5 @@
-use crate::amount::Amount;
 /// Account related actions (IDs wrapped in new type to avoid mixing them)
+use crate::amount::Amount;
 use std::fmt::Display;
 use std::str::FromStr;
 

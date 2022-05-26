@@ -4,7 +4,7 @@
 use crate::account::*;
 use crate::actions::Action;
 use crate::actions::*;
-use crate::amount::Amount;
+use crate::amount::{Amount, ParseError};
 use std::io::{BufRead, Write};
 
 use std::cmp::{Ord, Ordering};
@@ -45,43 +45,60 @@ impl FromStr for ClientId {
     }
 }
 
-// in our case the number of users is small (max 65536), so easily fits in memory...
+/// owner of client accounts, entry point to access them
 pub struct AccountHub {
     pub accounts: BTreeMap<ClientId, Account>,
-    account_factory: fn(ClientId) -> Account,
+    account_creator: fn(ClientId) -> Account,
 }
 
 impl AccountHub {
-    pub fn new(account_factory: fn(ClientId) -> Account) -> Self {
+    /// When a 'fresh' ClientId received by AccountHub, it needs to create a
+    /// new account - for that the give lambda function is used
+    /// this way easy to switch lambda ledger implementations
+    pub fn new(account_creator: fn(ClientId) -> Account) -> Self {
         AccountHub {
             accounts: BTreeMap::<ClientId, Account>::new(),
-            account_factory: account_factory,
+            account_creator: account_creator,
         }
     }
 
+    /// forward the given action request message to the account addressed by client_id
+    /// if it not exist yet a new account is created automatically by the lambda function
+    /// passed to the AccountHub::new
     pub fn execute(&mut self, client_id: ClientId, action: Action) -> Result<(), TransactionError> {
         self.accounts
             .entry(client_id)
-            .or_insert((self.account_factory)(client_id))
+            .or_insert((self.account_creator)(client_id))
             .execute(action)
     }
 
+    /// processes the lines of a csv file
+    /// "type, client, tx, amount" header is skipped
+    /// just like any other lines with parse error
+    /// executes the transactions given in well formed lines
+    /// if "error-print" feature is enabled, failures are logged on stderr
     pub fn process_csv(&mut self, reader: impl BufRead) {
         for line in reader.lines() {
             if let Ok(line) = &line {
-                if let Some((client_id, action)) = parse_from_csv(&line) {
-                    if let Err(_err) = self.execute(client_id, action) {
-                        #[cfg(feature = "error-print")]
-                        eprint!("Transaction refused: \"{line}\" -- error: {:?}\n", _err);
+                match parse_csv_line(&line) {
+                    Ok((client_id, action)) => {
+                        if let Err(_err) = self.execute(client_id, action) {
+                            #[cfg(feature = "error-print")]
+                            eprint!("Transaction refused: \"{line}\" -- Error: {}\n", _err);
+                        }
                     }
-                } else {
-                    #[cfg(feature = "error-print")]
-                    eprint!("Record skipped due to syntax error: \"{line}\"\n");
+
+                    Err(_err) => {
+                        #[cfg(feature = "error-print")]
+                        eprint!("Record skipped due to \"{_err}\" in \"{line}\"\n");
+                    }
                 }
             }
         }
     }
 
+    /// writes out the account summary of each client in csv format with
+    /// "client,available,held,total,locked" header line
     pub fn write_summary(&self, writer: &mut impl Write) -> Result<(), std::io::Error> {
         write!(writer, "client,available,held,total,locked\n").and_then(|()| {
             for item in &self.accounts {
@@ -106,7 +123,8 @@ impl AccountHub {
 #[grammar = "actions.pest"]
 struct ActionParser;
 
-pub fn parse_from_csv(line: &str) -> Option<(ClientId, Action)> {
+/// tuns a csv record into executable actions
+fn parse_csv_line(line: &str) -> Result<(ClientId, Action), ParseError> {
     if let Ok(items) = ActionParser::parse(Rule::line_input, &line) {
         //we get here only with valid number of items thanks to the parser!
         let mut cid = Option::<ClientId>::None;
@@ -144,11 +162,12 @@ pub fn parse_from_csv(line: &str) -> Option<(ClientId, Action)> {
                 _ => None,
             }
             .map(|action| (cid, action))
+            .ok_or(ParseError)
         } else {
-            None
+            Err(ParseError)
         }
     } else {
-        None
+        Err(ParseError)
     }
 }
 
