@@ -37,7 +37,7 @@ fn main() {
                 accounts.process_csv(reader).await;
 
                 // makes not much sense to convert write_summary to async
-                if let Err(_err) = accounts.write_summary(&mut std::io::stdout()) {
+                if let Err(_err) = accounts.write_summary(&mut tokio::io::stdout()).await {
                     #[cfg(feature = "error-print")]
                     eprint!("Error: {_err}\n");
                     process::exit(3);
@@ -45,7 +45,7 @@ fn main() {
             }
             Err(_err) => {
                 #[cfg(feature = "error-print")]
-                eprint!("Error: {_err} \"{filename}\"\n"); //TODO async log!
+                eprint!("Error: {_err} \"{filename}\"\n");
                 process::exit(2);
             }
         };

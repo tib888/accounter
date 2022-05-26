@@ -33,9 +33,14 @@ A unit test is also created base on this: account_hub.rs / full_integration_test
          Also deposit to cover the possible loss (and potentially automatically unlock) is also not possible.
          // An 'unlock' function is likely needed (at least when the available amount never went to negative)...
          // Also one may want to enumerate open disputes / executed charge backs (these states are stored in the ledger)...
+         // it would be a good idea to limit the max amount per transaction - add sanity check based on that to protect against erroneous data
 
 10. NOTE: "error-print" feature introduced - may be removed form default features if no output required on stderr
 
 11. To simulate the real-world requirements, where the transaction messages are likely coming as network messages, 
     and the ledger database is likely connected also trough network, I'll switch to async using tokio runtime.
     (Performance comparison could be done later...)
+
+12. If we assume that a transactions processing can be slow, we can speed processing up if we spawn their execution:
+    each client could have its own message queue in which the order of his transactions is be kept
+

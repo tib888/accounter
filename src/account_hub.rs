@@ -6,8 +6,7 @@ use crate::actions::Action;
 use crate::actions::*;
 use crate::amount::{Amount, ParseError};
 
-use std::io::Write;
-use tokio::io::AsyncBufReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
 use std::cmp::{Ord, Ordering};
 use std::collections::BTreeMap;
@@ -95,13 +94,11 @@ impl AccountHub {
                     if let Err(_err) = self.execute(client_id, action).await {
                         #[cfg(feature = "error-print")]
                         eprint!("Transaction refused: \"{line}\" -- Error: {}\n", _err);
-                        //TODO async log!
                     }
                 }
                 Err(_err) => {
                     #[cfg(feature = "error-print")]
                     eprint!("Record skipped due to \"{_err}\" in \"{line}\"\n");
-                    //TODO async log!
                 }
             }
         }
@@ -109,23 +106,27 @@ impl AccountHub {
 
     /// writes out the account summary of each client in csv format with
     /// "client,available,held,total,locked" header line
-    pub fn write_summary(&self, writer: &mut impl Write) -> Result<(), std::io::Error> {
-        write!(writer, "client,available,held,total,locked\n").and_then(|()| {
-            for item in &self.accounts {
-                let client = item.0;
-                let account = item.1;
-                write!(
-                    writer,
-                    "{}, {}, {}, {}, {}\n",
-                    client,
-                    account.available(),
-                    account.held(),
-                    account.total(),
-                    account.is_locked()
-                )?;
-            }
-            Ok(())
-        })
+    pub async fn write_summary<W>(&self, writer: &mut W) -> Result<(), std::io::Error>
+    where
+        W: AsyncWriteExt + Unpin,
+    {
+        writer
+            .write(b"client,available,held,total,locked\n")
+            .await?;
+        for item in &self.accounts {
+            let client = item.0;
+            let account = item.1;
+            let buf = format!(
+                "{}, {}, {}, {}, {}\n",
+                client,
+                account.available(),
+                account.held(),
+                account.total(),
+                account.is_locked()
+            );
+            writer.write(buf.as_bytes()).await?;
+        }
+        Ok(())
     }
 }
 
@@ -291,7 +292,7 @@ dispute, 2, 5,
             AccountHub::new(|_client_id| Account::new(Box::new(InMemoryLedger::new())));
         accounts.process_csv(INPUT).await;
         let mut buff = Vec::<u8>::new();
-        let _err = accounts.write_summary(&mut buff);
+        let _err = accounts.write_summary(&mut buff).await;
         assert_eq!(buff, OUTPUT);
     }
 }
