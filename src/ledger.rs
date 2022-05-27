@@ -3,6 +3,9 @@ use crate::amount::Amount;
 use async_trait::async_trait;
 use std::collections::HashMap;
 
+#[cfg(feature = "simulate-delays")]
+use tokio::time::{sleep, Duration};
+
 /// abstraction over a key-value pair storage
 #[async_trait]
 pub trait Ledger {
@@ -60,11 +63,17 @@ impl Ledger for InMemoryLedger {
     type Value = TransactionState;
 
     async fn contains(&self, key: Self::Key) -> Result<bool, Self::Error> {
+        #[cfg(feature = "simulate-delays")]
+        sleep(Duration::from_millis(1000)).await;
+
         //real db could return Err<DbError>
         Ok(self.db.contains_key(&key))
     }
 
     async fn get(&self, key: Self::Key) -> Result<Option<TransactionState>, Self::Error> {
+        #[cfg(feature = "simulate-delays")]
+        sleep(Duration::from_millis(1000)).await;
+
         //real db could return Err<DbError>
         Ok(self.db.get(&key).map(|v| *v))
     }
@@ -73,6 +82,9 @@ impl Ledger for InMemoryLedger {
     /// (a real db could return Err<DbError>)
     #[must_use]
     async fn insert(&mut self, key: Self::Key, state: TransactionState) -> Result<(), Self::Error> {
+        #[cfg(feature = "simulate-delays")]
+        sleep(Duration::from_millis(1000)).await;
+        
         self.db.insert(key, state);
         Ok(())
     }
