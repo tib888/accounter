@@ -258,7 +258,7 @@ deposit, 1, 1, 1.0,
 deposit,1, 2, 2    
 deposit, 1, 3, .30 
 
-deposit, 2, 4, 4.000000000000001    
+deposit, 2, 4, 4.000000000000000    
 deposit, 2, 5, 5.       
 deposit, 2, 6, +6.0     
 deposit, 2, 7, 5.0      
@@ -279,7 +279,8 @@ deposit, 1, 16, _1.2
 deposit, 1, 17, 1. 2   
 deposit, 1, 18, 1 .2   
 deposit, 1, 19, 1.2e3, 
-
+deposit, 1, 120, 1.00001,  
+deposit, 1, 121, -1.00001,
 
 deposit, 65536, 20, 1.2,
 deposit, 1, 4294967296, 1.2
@@ -313,7 +314,7 @@ withdrawal, 50, 64, 0
 withdrawal, 50, 65, 5    
 withdrawal, 50, 66, 99   
 deposit, 50, 67, 200.124 
-deposit, 50, 68, 1.00001 
+deposit, 50, 68, 1.00000 
 resolve, 50, 63,         
 chargeback, 50, 63,      
 resolve, 50, 3,          

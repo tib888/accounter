@@ -78,10 +78,11 @@ impl FromStr for Amount {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(decimal) = Decimal::from_str(s) {
-            (decimal * Amount::FRACT_DEC)
-                .to_i64()
-                .map(|int| Amount(int))
-                .ok_or(ParseError)
+            let n = decimal * Amount::FRACT_DEC;
+            if !n.fract().is_zero() {
+                return Err(ParseError);
+            };
+            n.to_i64().map(|int| Amount(int)).ok_or(ParseError)
         } else {
             Err(ParseError)
         }
@@ -116,6 +117,8 @@ mod tests {
         assert!(Amount::from_str(" 0.0 ").is_err());
         assert!(Amount::from_str("+ 1.0").is_err());
         assert!(Amount::from_str("- 1.0").is_err());
+        assert!(Amount::from_str("1.00001").is_err());
+        assert!(Amount::from_str("-1.00001").is_err());
         assert_eq!(Amount::from_str("0"), Ok(Amount::ZERO));
         assert_eq!(Amount::from_str(".0"), Ok(Amount::ZERO));
         assert_eq!(Amount::from_str("0."), Ok(Amount::ZERO));
@@ -123,6 +126,9 @@ mod tests {
         assert_eq!(Amount::from_str("1.0"), Ok(Amount(Amount::FRACT)));
         assert_eq!(Amount::from_str("+1.0"), Ok(Amount(Amount::FRACT)));
         assert_eq!(Amount::from_str("-1.0"), Ok(Amount(-Amount::FRACT)));
+        assert_eq!(Amount::from_str("1.00000"), Ok(Amount(Amount::FRACT)));
+        assert_eq!(Amount::from_str("+1.00000"), Ok(Amount(Amount::FRACT)));
+        assert_eq!(Amount::from_str("-1.00000"), Ok(Amount(-Amount::FRACT)));
         assert_eq!(Amount::from_str("922337203685477.5807"), Ok(Amount::MAX));
         assert_eq!(Amount::from_str("+922337203685477.5807"), Ok(Amount::MAX));
         assert_eq!(Amount::from_str("-922337203685477.5808"), Ok(Amount::MIN));
@@ -144,7 +150,7 @@ mod tests {
         assert_eq!(format!("{}", Amount::from_str("1.01").unwrap()), "1.01");
         assert_eq!(format!("{}", Amount::from_str("1.001").unwrap()), "1.001");
         assert_eq!(format!("{}", Amount::from_str("1.0001").unwrap()), "1.0001");
-        assert_eq!(format!("{}", Amount::from_str("1.00001").unwrap()), "1");
+        assert_eq!(format!("{}", Amount::from_str("1.00000").unwrap()), "1");
 
         assert_eq!(format!("{}", Amount::from_str("+1.1").unwrap()), "1.1");
         assert_eq!(format!("{}", Amount::from_str("+1.01").unwrap()), "1.01");
@@ -153,7 +159,7 @@ mod tests {
             format!("{}", Amount::from_str("+1.0001").unwrap()),
             "1.0001"
         );
-        assert_eq!(format!("{}", Amount::from_str("+1.00001").unwrap()), "1");
+        assert_eq!(format!("{}", Amount::from_str("+1.00000").unwrap()), "1");
 
         assert_eq!(format!("{}", Amount::from_str("+0.1").unwrap()), "0.1");
         assert_eq!(format!("{}", Amount::from_str("+0.01").unwrap()), "0.01");
@@ -162,7 +168,7 @@ mod tests {
             format!("{}", Amount::from_str("+0.0001").unwrap()),
             "0.0001"
         );
-        assert_eq!(format!("{}", Amount::from_str("+0.00001").unwrap()), "0");
+        assert_eq!(format!("{}", Amount::from_str("+0.00000").unwrap()), "0");
 
         assert_eq!(format!("{}", Amount::from_str("-1.1").unwrap()), "-1.1");
         assert_eq!(format!("{}", Amount::from_str("-1.01").unwrap()), "-1.01");
@@ -171,7 +177,7 @@ mod tests {
             format!("{}", Amount::from_str("-1.0001").unwrap()),
             "-1.0001"
         );
-        assert_eq!(format!("{}", Amount::from_str("-1.00001").unwrap()), "-1");
+        assert_eq!(format!("{}", Amount::from_str("-1.00000").unwrap()), "-1");
 
         assert_eq!(format!("{}", Amount::from_str("-0.1").unwrap()), "-0.1");
         assert_eq!(format!("{}", Amount::from_str("-0.01").unwrap()), "-0.01");
@@ -180,20 +186,17 @@ mod tests {
             format!("{}", Amount::from_str("-0.0001").unwrap()),
             "-0.0001"
         );
-        assert_eq!(format!("{}", Amount::from_str("-0.00001").unwrap()), "0");
+        assert_eq!(format!("{}", Amount::from_str("-0.00000").unwrap()), "0");
 
         assert_eq!(
-            format!("{}", Amount::from_str("1.00011").unwrap()),
+            format!("{}", Amount::from_str("1.00010").unwrap()),
             "1.0001"
         );
         assert_eq!(
             format!("{}", Amount::from_str("-1.0001").unwrap()),
             "-1.0001"
         );
-        assert_eq!(
-            format!("{}", Amount::from_str("-1.00011").unwrap()),
-            "-1.0001"
-        );
+        assert!(Amount::from_str("-1.00011").is_err());
     }
 
     #[test]
@@ -240,8 +243,8 @@ mod tests {
         );
         assert_eq!(
             Amount::checked_add(
-                Amount::from_str("56.12349").unwrap(),
-                Amount::from_str("78.12349").unwrap()
+                Amount::from_str("56.12340").unwrap(),
+                Amount::from_str("78.12340").unwrap()
             )
             .unwrap(),
             Amount::from_str("134.2468").unwrap()
@@ -295,8 +298,8 @@ mod tests {
         );
         assert_eq!(
             Amount::checked_sub(
-                Amount::from_str("78.12345").unwrap(),
-                Amount::from_str("56.12343").unwrap()
+                Amount::from_str("78.12340").unwrap(),
+                Amount::from_str("56.12340").unwrap()
             )
             .unwrap(),
             Amount::from_str("22").unwrap()
@@ -339,7 +342,7 @@ mod tests {
         );
 
         assert_eq!(
-            Amount::from_str("2.50001").unwrap() == Amount::from_str("2.50003").unwrap(),
+            Amount::from_str("2.50000").unwrap() == Amount::from_str("2.50000").unwrap(),
             true
         );
         assert_eq!(

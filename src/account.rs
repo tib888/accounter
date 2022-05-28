@@ -346,7 +346,7 @@ mod tests {
         deposit(
             &mut account,
             4,
-            "0.00001",
+            "0.00000",
             Err(TransactionError::InvalidAmount),
         )
         .await;
