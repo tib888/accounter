@@ -4,9 +4,7 @@ pub mod actions;
 pub mod amount;
 pub mod ledger;
 
-use crate::account::*;
 use crate::account_hub::*;
-use crate::ledger::InMemoryLedger;
 
 use std::env;
 use std::process;
@@ -28,16 +26,11 @@ fn main() {
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         match File::open(filename).await {
             Ok(file) => {
-                let mut accounts =
-                    AccountHub::new(|_client_id| Account::new(Box::new(InMemoryLedger::new())));
-
+                let mut accounts = AccountHub::new();
                 let capacity = 0x1000;
                 let reader = tokio::io::BufReader::with_capacity(capacity, file);
-
-                accounts.process_csv(reader).await;
-
-                // makes not much sense to convert write_summary to async
-                if let Err(_err) = accounts.write_summary(&mut tokio::io::stdout()).await {
+                let mut writer = tokio::io::stdout();
+                if let Err(_err) = accounts.process_csv(reader, &mut writer).await {
                     #[cfg(feature = "error-print")]
                     eprint!("Error: {_err}\n");
                     process::exit(3);

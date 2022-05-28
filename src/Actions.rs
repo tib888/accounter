@@ -26,19 +26,19 @@ impl FromStr for TransactionId {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, PartialOrd)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Transaction {
     Deposit(Amount),
     Withdrawal(Amount),
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, PartialOrd)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct TransactionData {
     pub id: TransactionId,
     pub transaction: Transaction,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, PartialOrd)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Action {
     Transact(TransactionData),
     Dispute(TransactionId),

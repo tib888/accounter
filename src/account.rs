@@ -319,9 +319,13 @@ mod tests {
         assert_eq!(account.is_locked(), locked);
     }
 
+    fn connect() -> Account {
+        Account::new(Box::new(InMemoryLedger::connect().unwrap()))
+    }
+
     #[tokio::test]
     async fn starting_from_zero() {
-        let account = Account::new(Box::new(InMemoryLedger::new()));
+        let account = connect();
         assert_eq!(account.available(), Amount::ZERO);
         assert_eq!(account.total(), Amount::ZERO);
         assert_eq!(account.held(), Amount::ZERO);
@@ -329,7 +333,7 @@ mod tests {
 
     #[tokio::test]
     async fn deposit_sum_up() {
-        let mut account = Account::new(Box::new(InMemoryLedger::new()));
+        let mut account = connect();
         let amount1 = "1234567890.1234";
         let amount2 = "1.2";
         let amount3 = "1234567891.3234";
@@ -360,7 +364,7 @@ mod tests {
 
     #[tokio::test]
     async fn withdrawals() {
-        let mut account = Account::new(Box::new(InMemoryLedger::new()));
+        let mut account = connect();
         deposit(&mut account, 1, "0.1", Ok(())).await;
         withdraw(
             &mut account,
@@ -392,7 +396,7 @@ mod tests {
 
     #[tokio::test]
     async fn disputes() {
-        let mut account = Account::new(Box::new(InMemoryLedger::new()));
+        let mut account = connect();
         withdraw(&mut account, 1, "0", Err(TransactionError::InvalidAmount)).await;
         withdraw(&mut account, 2, "1", Err(TransactionError::InvalidAmount)).await;
 
@@ -446,7 +450,7 @@ mod tests {
 
     #[tokio::test]
     async fn disputes2() {
-        let mut account = Account::new(Box::new(InMemoryLedger::new()));
+        let mut account = connect();
         deposit(&mut account, 3, "100", Ok(())).await;
         withdraw(&mut account, 4, "0", Err(TransactionError::InvalidAmount)).await;
         withdraw(&mut account, 5, "5", Ok(())).await;

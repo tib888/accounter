@@ -13,5 +13,6 @@ tokio = { version = "1", features = ["rt-multi-thread", "io-util", "fs", "io-std
 
 [features]
 default = ["error-print"] 
-error-print = []
-simulate-delays = []
+error-print = [] #enables printing (logging) the errors to stderr
+trace-print = [] #enables tracing the per-client spawned tasks on stderr
+simulate-delays = [] #adds 1000ms delay to every ledger database transaction as simulation

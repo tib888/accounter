@@ -1,5 +1,6 @@
 use crate::actions::TransactionId;
 use crate::amount::Amount;
+
 use async_trait::async_trait;
 use std::collections::HashMap;
 
@@ -8,16 +9,13 @@ use tokio::time::{sleep, Duration};
 
 /// abstraction over a key-value pair storage
 #[async_trait]
-pub trait Ledger {
+pub trait Ledger: Send + Sync {
     type Error;
     type Key;
     type Value;
 
     /// returns true if the given key is already in the storage (or error)
     async fn contains(&self, key: Self::Key) -> Result<bool, Self::Error>;
-    // {
-    //     self.get(key).map(|_| true)
-    // }
 
     /// returns value for given key is already in the storage (or error)
     async fn get(&self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error>;
@@ -49,10 +47,11 @@ pub struct InMemoryLedger {
 }
 
 impl InMemoryLedger {
-    pub fn new() -> Self {
-        Self {
+    /// simulate a db connection
+    pub fn connect() -> Result<Self, ()> {
+        Ok(Self {
             db: HashMap::<TransactionId, TransactionState>::new(),
-        }
+        })
     }
 }
 
@@ -84,7 +83,7 @@ impl Ledger for InMemoryLedger {
     async fn insert(&mut self, key: Self::Key, state: TransactionState) -> Result<(), Self::Error> {
         #[cfg(feature = "simulate-delays")]
         sleep(Duration::from_millis(1000)).await;
-        
+
         self.db.insert(key, state);
         Ok(())
     }

@@ -5,8 +5,12 @@ use crate::account::*;
 use crate::actions::Action;
 use crate::actions::*;
 use crate::amount::{Amount, ParseError};
+use crate::ledger::*;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use tokio::sync::mpsc::error::SendError;
+use tokio::sync::mpsc::{self, Sender};
+use tokio::task::JoinHandle;
 
 use std::cmp::{Ord, Ordering};
 use std::collections::BTreeMap;
@@ -48,44 +52,95 @@ impl FromStr for ClientId {
 
 /// owner of client accounts, entry point to access them
 pub struct AccountHub {
-    pub accounts: BTreeMap<ClientId, Account>,
-    account_creator: fn(ClientId) -> Account,
+    accounts: BTreeMap<ClientId, (Sender<Action>, JoinHandle<(ClientId, Account)>)>,
 }
 
 impl AccountHub {
     /// When a 'fresh' ClientId received by AccountHub, it needs to create a
     /// new account - for that the give lambda function is used
     /// this way easy to switch lambda ledger implementations
-    pub fn new(account_creator: fn(ClientId) -> Account) -> Self {
+    pub fn new() -> Self {
         AccountHub {
-            accounts: BTreeMap::<ClientId, Account>::new(),
-            account_creator: account_creator,
+            accounts: BTreeMap::<ClientId, (Sender<Action>, JoinHandle<(ClientId, Account)>)>::new(
+            ),
         }
     }
 
     /// forward the given action request message to the account addressed by client_id
     /// if it not exist yet a new account is created automatically by the lambda function
     /// passed to the AccountHub::new
-    pub async fn execute(
+    async fn execute(
         &mut self,
         client_id: ClientId,
         action: Action,
-    ) -> Result<(), TransactionError> {
-        self.accounts
-            .entry(client_id)
-            .or_insert((self.account_creator)(client_id))
-            .execute(action)
-            .await
+    ) -> Result<(), SendError<Action>> {
+        if let Some((action_sender, _join_handle)) = self.accounts.get(&client_id) {
+            //if the client is already known, simply send the action for processing by his account
+            action_sender.send(action).await
+        } else {
+            //for new clients an account with a transaction database has to be created
+            //and on success send the first action for processing by his account
+            match InMemoryLedger::connect() {
+                Ok(ledger) => {
+                    let (action_sender, mut action_receiver) = mpsc::channel::<Action>(16);
+                    let mut account = Account::new(Box::new(ledger));
+
+                    // for each account spawn a task which processes his actions form the fifo chanel
+                    let join_handle: JoinHandle<_> = tokio::spawn(async move {
+                        #[cfg(feature = "trace-print")]
+                        eprintln!("> {client_id} spawned");
+
+                        while let Some(action) = action_receiver.recv().await {
+                            #[cfg(feature = "trace-print")]
+                            eprintln!("> {client_id} executing: {:?}", action);
+
+                            match account.execute(action).await {
+                                Ok(()) => {}
+                                Err(_err) => {
+                                    #[cfg(feature = "error-print")]
+                                    eprint!(
+                                        "Transaction refused: {_err} (client: {client_id} {:?})\n",
+                                        action
+                                    );
+                                }
+                            };
+                        }
+
+                        #[cfg(feature = "trace-print")]
+                        eprintln!("> {client_id} is stopped.");
+                        (client_id, account)
+                    });
+                    let result = action_sender.send(action).await; //send the first action!
+                    self.accounts
+                        .insert(client_id, (action_sender, join_handle));
+                    result
+                }
+                Err(_) => {
+                    #[cfg(feature = "error-print")]
+                    eprint!("Transaction refused: Database connection failed (client: {client_id} {:?})\n", action);
+                    Ok(())
+                }
+            }
+        }
     }
 
     /// processes the lines of a csv file
     /// "type, client, tx, amount" header is skipped
     /// just like any other lines with parse error
     /// executes the transactions given in well formed lines
+    ///
+    /// writes out the account summary of each client in csv format with
+    /// "client,available,held,total,locked" header line
+    ///
     /// if "error-print" feature is enabled, failures are logged on stderr
-    pub async fn process_csv<R>(&mut self, reader: R)
+    pub async fn process_csv<R, W>(
+        &mut self,
+        reader: R,
+        writer: &mut W,
+    ) -> Result<(), std::io::Error>
     where
         R: AsyncBufReadExt + Unpin,
+        W: AsyncWriteExt + Unpin + Send,
     {
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
@@ -93,7 +148,10 @@ impl AccountHub {
                 Ok((client_id, action)) => {
                     if let Err(_err) = self.execute(client_id, action).await {
                         #[cfg(feature = "error-print")]
-                        eprint!("Transaction refused: \"{line}\" -- Error: {}\n", _err);
+                        eprint!(
+                            "Transaction refused: {_err} (client: {client_id} {:?})\n",
+                            action
+                        );
                     }
                 }
                 Err(_err) => {
@@ -102,30 +160,39 @@ impl AccountHub {
                 }
             }
         }
-    }
 
-    /// writes out the account summary of each client in csv format with
-    /// "client,available,held,total,locked" header line
-    pub async fn write_summary<W>(&self, writer: &mut W) -> Result<(), std::io::Error>
-    where
-        W: AsyncWriteExt + Unpin,
-    {
+        //drop the sender of every account -> they exit from their spawned task and returning summary
         writer
             .write(b"client,available,held,total,locked\n")
             .await?;
-        for item in &self.accounts {
-            let client = item.0;
-            let account = item.1;
-            let buf = format!(
-                "{}, {}, {}, {}, {}\n",
-                client,
-                account.available(),
-                account.held(),
-                account.total(),
-                account.is_locked()
-            );
-            writer.write(buf.as_bytes()).await?;
+
+        //TODO Nightly has "pop_first"
+        //luckily the BTreeMap is sorted by key, so always produces the same result (good for unit tests).
+        let clients: Vec<_> = self.accounts.keys().cloned().collect();
+        for client in clients {
+            if let Some((sender, join_handle)) = self.accounts.remove(&client) {
+                drop(sender);
+                if let Ok((client_id, account)) = join_handle.await {
+                    #[cfg(feature = "trace-print")]
+                    eprint!("> closed {client_id}\n");
+
+                    let summary = format!(
+                        "{}, {}, {}, {}, {}\n",
+                        client_id,
+                        account.available(),
+                        account.held(),
+                        account.total(),
+                        account.is_locked()
+                    );
+
+                    if let Err(_err) = writer.write(summary.as_bytes()).await {
+                        #[cfg(feature = "error-print")]
+                        eprint!("Was unable to write out summary \"{summary}\" due to error: \"{_err}\"\n");
+                    }
+                }
+            }
         }
+
         Ok(())
     }
 }
@@ -185,7 +252,6 @@ fn parse_csv_line(line: &str) -> Result<(ClientId, Action), ParseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ledger::*;
 
     const INPUT: &[u8] = br###"type,   client, tx, amount
 deposit, 1, 1, 1.0,
@@ -288,11 +354,12 @@ dispute, 2, 5,
 
     #[tokio::test]
     async fn full_integration_test() {
-        let mut accounts =
-            AccountHub::new(|_client_id| Account::new(Box::new(InMemoryLedger::new())));
-        accounts.process_csv(INPUT).await;
-        let mut buff = Vec::<u8>::new();
-        let _err = accounts.write_summary(&mut buff).await;
-        assert_eq!(buff, OUTPUT);
+        let mut summary_buff = Vec::<u8>::new();
+        let mut accounts = AccountHub::new();
+        assert_eq!(
+            accounts.process_csv(INPUT, &mut summary_buff).await.is_ok(),
+            true
+        );
+        assert_eq!(summary_buff, OUTPUT);
     }
 }
