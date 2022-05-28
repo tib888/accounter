@@ -46,14 +46,17 @@ Also deposit to cover the possible loss (and potentially automatically unlock) i
 
 * NOTE: To simulate the real-world requirements, where the transaction messages are likely coming as network messages, and the ledger database is likely connected also trough network, I'll switch to async using tokio runtime.
 
-* NOTE: when transaction processing is done async, error reporting will not be immediate - the "error-print" logging is useful... (could be also done by introducing a  mpsc channel for response messages...)
-
 * NOTE: Performance comparison could be done later...
 
 * NOTE: If we assume that a transactions processing can be slow, we can speed processing up if we spawn their execution:
 Each client account could have its own message queue in which the order of his transactions is be kept
 
 * The spawned execution is ready, improved the artificially slowed down test case speed from 77s to 34s.
+
+* Since transaction processing is async, error reporting is not immediate - a response collector task is spawned, which collects the responses from accounts
+In this test project this is not needed, but in real life likely it would be...
+
+* NOTE: turning off "error-print" feature will improve processing speed (not sending responses, no queue syncing is needed, etc.)
 
 * NOTE: It would be nice to add some real stress tests for speed and memory usage.
 However the estimation is that we use about 16 bytes per transaction so the server should have more than 64Gb memory (or the InMemoryLedger have to be replaced...)

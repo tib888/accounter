@@ -73,6 +73,7 @@ impl AccountHub {
         &mut self,
         client_id: ClientId,
         action: Action,
+        response_sender: &Sender<(Result<(), TransactionError>, (ClientId, Action))>,
     ) -> Result<(), SendError<Action>> {
         if let Some((action_sender, _join_handle)) = self.accounts.get(&client_id) {
             //if the client is already known, simply send the action for processing by his account
@@ -84,8 +85,9 @@ impl AccountHub {
                 Ok(ledger) => {
                     let (action_sender, mut action_receiver) = mpsc::channel::<Action>(16);
                     let mut account = Account::new(Box::new(ledger));
+                    let responder = response_sender.clone(); //each spawned task has his own sender to the response channel
 
-                    // for each account spawn a task which processes his actions form the fifo chanel
+                    // for each account spawn a task which processes his actions form the channel
                     let join_handle: JoinHandle<_> = tokio::spawn(async move {
                         #[cfg(feature = "trace-print")]
                         eprintln!("> {client_id} spawned");
@@ -94,16 +96,12 @@ impl AccountHub {
                             #[cfg(feature = "trace-print")]
                             eprintln!("> {client_id} executing: {:?}", action);
 
-                            match account.execute(action).await {
-                                Ok(()) => {}
-                                Err(_err) => {
-                                    #[cfg(feature = "error-print")]
-                                    eprint!(
-                                        "Transaction refused: {_err} (client: {client_id} {:?})\n",
-                                        action
-                                    );
-                                }
-                            };
+                            let response = account.execute(action).await;
+
+                            //if "error-print" feature is not enable will execute faster (not sending responses, no queue syncing is needed)
+                            #[cfg(feature = "error-print")]
+                            let _err = responder.send((response, (client_id, action))).await;
+                            //discard possible error
                         }
 
                         #[cfg(feature = "trace-print")]
@@ -142,11 +140,29 @@ impl AccountHub {
         R: AsyncBufReadExt + Unpin,
         W: AsyncWriteExt + Unpin + Send,
     {
+        // spawn a task for logging action responses:
+        let (response_sender, mut response_receiver) =
+            mpsc::channel::<(Result<(), TransactionError>, (ClientId, Action))>(64);
+        tokio::spawn(async move {
+            while let Some((_response, (_client_id, _action))) = response_receiver.recv().await {
+                #[cfg(feature = "error-print")]
+                match _response {
+                    Ok(()) => eprintln!("## Transaction successful: {_client_id} {:?}", _action),
+                    Err(err) => {
+                        eprintln!("## Transaction refused: {err} - {_client_id} {:?}", _action)
+                    }
+                }
+            }
+        });
+
+        // read the file and process the lines
+        // a part of the possible errors returned immediately
+        // the rest is collected by the above spawned task.
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
             match parse_csv_line(&line) {
                 Ok((client_id, action)) => {
-                    if let Err(_err) = self.execute(client_id, action).await {
+                    if let Err(_err) = self.execute(client_id, action, &response_sender).await {
                         #[cfg(feature = "error-print")]
                         eprint!(
                             "Transaction refused: {_err} (client: {client_id} {:?})\n",
@@ -161,7 +177,7 @@ impl AccountHub {
             }
         }
 
-        //drop the sender of every account -> they exit from their spawned task and returning summary
+        //drop the sender of every account -> they will exit from their spawned task and returning summary
         writer
             .write(b"client,available,held,total,locked\n")
             .await?;
