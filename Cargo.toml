@@ -2,6 +2,7 @@
 name = "accounter"
 version = "0.1.0"
 edition = "2021"
+repository = "https://https://github.com/tib888/accounter"
 authors = ["Tibor Prokai"]
 
 [dependencies]

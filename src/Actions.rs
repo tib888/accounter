@@ -1,8 +1,9 @@
-/// Account related actions (IDs wrapped in new type to avoid mixing them)
-use crate::amount::Amount;
+/// Account related actions
 use std::fmt::Display;
 use std::str::FromStr;
 
+/// Transaction ids wrapped in new type to avoid mixing them with other ids
+use crate::amount::Amount;
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd)]
 pub struct TransactionId(u32);
 
@@ -28,19 +29,16 @@ impl FromStr for TransactionId {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Transaction {
+    /// Means: increase the balance of an account by the given amount
     Deposit(Amount),
+    /// Means: decrease the balance of an account by the given amount
     Withdrawal(Amount),
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub struct TransactionData {
-    pub id: TransactionId,
-    pub transaction: Transaction,
-}
-
+/// List of account manipulation actions
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Action {
-    Transact(TransactionData),
+    Transact((TransactionId, Transaction)),
     Dispute(TransactionId),
     Resolve(TransactionId),
     ChargeBack(TransactionId),

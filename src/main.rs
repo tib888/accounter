@@ -1,18 +1,10 @@
-pub mod account;
-pub mod account_hub;
-pub mod actions;
-pub mod amount;
-pub mod ledger;
-
-use crate::account_hub::*;
+use accounter::ledger::InMemoryLedger;
+use accounter::*;
 
 use std::env;
 use std::process;
 
 use tokio::fs::File;
-
-#[macro_use]
-extern crate pest_derive;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -26,11 +18,16 @@ fn main() {
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         match File::open(filename).await {
             Ok(file) => {
-                let mut accounts = AccountHub::new();
                 let capacity = 0x1000;
                 let reader = tokio::io::BufReader::with_capacity(capacity, file);
                 let mut writer = tokio::io::stdout();
-                if let Err(_err) = accounts.process_csv(reader, &mut writer).await {
+                if let Err(_err) = process_csv(
+                    AccountHub::new(|_client_id| InMemoryLedger::connect()),
+                    reader,
+                    &mut writer,
+                )
+                .await
+                {
                     #[cfg(feature = "error-print")]
                     eprint!("Error: {_err}\n");
                     process::exit(3);

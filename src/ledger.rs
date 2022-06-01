@@ -48,10 +48,12 @@ pub struct InMemoryLedger {
 
 impl InMemoryLedger {
     /// simulate a db connection
-    pub fn connect() -> Result<Self, ()> {
-        Ok(Self {
+    pub fn connect(
+    ) -> Result<Box<dyn Ledger<Key = TransactionId, Value = TransactionState, Error = ()>>, ()>
+    {
+        Ok(Box::new(Self {
             db: HashMap::<TransactionId, TransactionState>::new(),
-        })
+        }))
     }
 }
 

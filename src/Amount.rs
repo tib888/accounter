@@ -8,15 +8,17 @@ use std::str::FromStr;
 
 /// Amount is a new type which represent funds.
 /// Any arithmetics with it must be carefully thought so the usual operators are not implemented, just checked ones.
+///
 /// Amount chosen not to be 'Decimal' based on the assumption that no more than 2^63/10000-1 units expected
-/// per transaction (or even in one account balance)
-/// it is using fixed point arithmetics with 4 digits precision, on a 64bit signed integer
+/// per transaction (or even in one account balance).
+/// It is using fixed point arithmetics with 4 digits precision, on a 64bit signed integer
 /// this way faster, more memory efficient, than to work on decimals
 pub struct Amount(i64);
 
 impl Amount {
-    const FRACT: i64 = 10_000i64;
-    const FRACT_DEC: Decimal = Decimal::from_parts(10_000, 0, 0, false, 0);
+    const FRACT_DIGITS: usize = 4; //number of fractional digits to use
+    const FRACT: i64 = i64::pow(10, Amount::FRACT_DIGITS as u32); //10^4 = 10_000
+    const FRACT_DEC: Decimal = Decimal::from_parts(Amount::FRACT as u32, 0, 0, false, 0); //10^4 = 10_000
 
     pub const MAX: Amount = Amount(i64::MAX);
     pub const MIN: Amount = Amount(i64::MIN);
@@ -42,8 +44,8 @@ impl Display for Amount {
         } else if self.0 >= Amount::FRACT || self.0 <= -Amount::FRACT {
             let s = format!("{}", self.0);
             let l = s.len();
-            write!(f, "{}", &s[0..l - 4])?;
-            let fract = &s[l - 4..l].trim_end_matches('0');
+            write!(f, "{}", &s[0..l - Amount::FRACT_DIGITS])?;
+            let fract = &s[l - Amount::FRACT_DIGITS..l].trim_end_matches('0');
             if fract.len() > 0 {
                 write!(f, ".{}", fract)
             } else {
@@ -57,11 +59,16 @@ impl Display for Amount {
             } else {
                 write!(f, "-0.")?;
             };
-            write!(f, "{}", s[l - 4..l].trim_end_matches('0'))
+            write!(
+                f,
+                "{}",
+                s[l - Amount::FRACT_DIGITS..l].trim_end_matches('0')
+            )
         }
     }
 }
 
+/// Signals that amount parsing from string was not successful
 #[derive(Debug, PartialEq)]
 pub struct ParseError;
 

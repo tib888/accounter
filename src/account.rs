@@ -1,23 +1,34 @@
 use std::error::Error;
 use std::fmt;
 
-use crate::actions::*;
-use crate::amount::*;
+pub use crate::actions::*;
+pub use crate::amount::*;
 use crate::ledger::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TransactionError {
-    AccountLocked,          //try to access locked account
-    InvalidAmount,          //zero or negative transaction amount
-    WouldOverFlow,          //can not book that much amount
-    DisputeNotOpenedYet,    //resolve/charge back needs open dispute first
-    AlreadyInDispute,       //a dispute already opened with the given transaction id
-    AlreadyChargedBack,     //already charged back
-    InvalidTransactionId,   //there is no such transaction in the ledger
-    InvalidTransactionType, //based on assumption that withdrawals can not be disputed
-    RepeatedTransactionId, //this check is theoretically not needed (unique TransactionIds guaranteed in specification)
-    DbError,               //a ledger real DB would have possible access errors
-    Unexpected,            //this should have never happened
+    /// try to access locked account
+    AccountLocked,
+    /// zero or negative transaction amount
+    InvalidAmount,
+    /// can not book that much amount
+    WouldOverFlow,
+    /// resolve/charge back needs open dispute first
+    DisputeNotOpenedYet,
+    /// a dispute already opened with the given transaction id
+    AlreadyInDispute,
+    /// already charged back
+    AlreadyChargedBack,
+    /// there is no such transaction in the ledger
+    InvalidTransactionId,
+    /// based on assumption that withdrawals can not be disputed
+    InvalidTransactionType,
+    /// this check is theoretically not needed (unique TransactionIds guaranteed in specification)
+    RepeatedTransactionId,
+    /// a ledger real DB would have possible access errors
+    DbError,
+    /// this should never happen
+    Unexpected,
 }
 
 impl fmt::Display for TransactionError {
@@ -49,6 +60,7 @@ pub struct Account {
 }
 
 impl Account {
+    /// Creates a not locked account with zero balance.
     pub fn new(
         ledger: Box<dyn Ledger<Error = (), Key = TransactionId, Value = TransactionState>>,
     ) -> Self {
@@ -82,25 +94,29 @@ impl Account {
 
     /// Deposit/Withdraw funds to/from the account
     /// REQUIRES: unique TransactionIds (guaranteed in specification)
-    async fn transact(&mut self, data: TransactionData) -> Result<(), TransactionError> {
+    async fn transact(
+        &mut self,
+        id: TransactionId,
+        transaction: Transaction,
+    ) -> Result<(), TransactionError> {
         if self.is_locked() {
             return Err(TransactionError::AccountLocked); //TODO ASK! should we allow deposit in this case?
         }
-        match self.ledger.contains(data.id).await //this check is theoretically not needed (unique TransactionIds guaranteed in specification)
+        match self.ledger.contains(id).await //this check is theoretically not needed (unique TransactionIds guaranteed in specification)
         {
             Ok(true) => { return Err(TransactionError::RepeatedTransactionId); }
             Err(_) => { return Err(TransactionError::DbError) }
             _ => {}
         }
 
-        match data.transaction {
+        match transaction {
             Transaction::Deposit(amount) => {
                 if amount <= Amount::ZERO {
                     return Err(TransactionError::InvalidAmount);
                 }
                 if let Some(new_total) = Amount::checked_add(self.total, amount) {
                     self.ledger
-                        .insert(data.id, TransactionState::Deposit(amount))
+                        .insert(id, TransactionState::Deposit(amount))
                         .await
                         .and_then(|_| {
                             self.total = new_total;
@@ -117,7 +133,7 @@ impl Account {
                 }
                 if let Some(new_total) = Amount::checked_sub(self.total, amount) {
                     self.ledger
-                        .insert(data.id, TransactionState::Withdrawal(amount))
+                        .insert(id, TransactionState::Withdrawal(amount))
                         .await
                         .and_then(|_| {
                             self.total = new_total;
@@ -229,12 +245,13 @@ impl Account {
         }
     }
 
-    /// The execution order of the transactions must be kept
-    /// (Out of order transaction processing must NOT be used!)
+    /// The one and only entry point to mutate the state of an Account.
+    /// The execution order of the transactions must be kept.
+    /// (In other words: out of order transaction processing must NOT be used!)
     /// Concurrent transaction processing is also forbidden!
     pub async fn execute(&mut self, action: Action) -> Result<(), TransactionError> {
         match action {
-            Action::Transact(data) => self.transact(data).await,
+            Action::Transact((id, transaction)) => self.transact(id, transaction).await,
             Action::Dispute(id) => self.start_dispute(id).await,
             Action::Resolve(id) => self.resolve_dispute(id).await,
             Action::ChargeBack(id) => self.resolve_dispute_with_charge_back(id).await,
@@ -255,10 +272,10 @@ mod tests {
     ) {
         assert_eq!(
             account
-                .execute(Action::Transact(TransactionData {
-                    id: TransactionId::from(id),
-                    transaction: Transaction::Deposit(Amount::from_str(amount).unwrap())
-                }))
+                .execute(Action::Transact((
+                    TransactionId::from(id),
+                    Transaction::Deposit(Amount::from_str(amount).unwrap())
+                )))
                 .await,
             expected
         );
@@ -272,10 +289,10 @@ mod tests {
     ) {
         assert_eq!(
             account
-                .execute(Action::Transact(TransactionData {
-                    id: TransactionId::from(id),
-                    transaction: Transaction::Withdrawal(Amount::from_str(amount).unwrap())
-                }))
+                .execute(Action::Transact((
+                    TransactionId::from(id),
+                    Transaction::Withdrawal(Amount::from_str(amount).unwrap())
+                )))
                 .await,
             expected
         );
@@ -320,7 +337,7 @@ mod tests {
     }
 
     fn connect() -> Account {
-        Account::new(Box::new(InMemoryLedger::connect().unwrap()))
+        Account::new(InMemoryLedger::connect().unwrap())
     }
 
     #[tokio::test]
