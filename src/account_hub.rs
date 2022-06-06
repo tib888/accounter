@@ -1,17 +1,15 @@
 /// This hub has two main purpose:
 /// * it is the owner of all Accounts, does lifetime management
 /// * it is responsible to forward requests to the right Account actor
-pub use crate::account::*;
-use crate::ledger::*;
-
-use tokio::sync::mpsc::error::SendError;
-use tokio::sync::mpsc::{self, Sender};
-use tokio::task::JoinHandle;
-
 use std::cmp::Ord;
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::str::FromStr;
+use tokio::sync::mpsc::error::SendError;
+use tokio::sync::mpsc::{self, Sender};
+use tokio::task::JoinHandle;
+
+pub use crate::account::*;
 
 /// Client ids wrapped in new type to avoid mixing them with other ids.
 /// Used to address the accounts managed by AccountHub.
@@ -47,7 +45,7 @@ pub struct AccountHub<L> {
 
 impl<L> AccountHub<L>
 where
-    L: Ledger<Key = TransactionId, Value = TransactionState> + 'static,
+    L: Ledger + 'static,
 {
     /// When a 'fresh' ClientId received by AccountHub, it creates a new account using
     /// the given 'ledger_connector' lambda function.

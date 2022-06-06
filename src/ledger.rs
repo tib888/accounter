@@ -1,33 +1,31 @@
-use crate::actions::TransactionId;
-use crate::amount::Amount;
-
 use async_trait::async_trait;
-use std::collections::HashMap;
-use std::error::Error;
-use std::fmt;
 use std::fmt::Display;
+use std::str::FromStr;
 
-#[cfg(feature = "simulate-delays")]
-use tokio::time::{sleep, Duration};
+pub use crate::amount::*;
 
-/// abstraction over a key-value pair storage
-#[async_trait]
-pub trait Ledger: Send + Sync {
-    type Error: Send + Sync;
-    type Key;
-    type Value;
+/// Transaction ids wrapped in new type to avoid mixing them with other ids
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
+pub struct TransactionId(u32);
 
-    /// returns true if the given key is already in the storage (or error)
-    async fn contains(&self, key: Self::Key) -> Result<bool, Self::Error>;
+impl From<u32> for TransactionId {
+    fn from(v: u32) -> Self {
+        TransactionId(v)
+    }
+}
 
-    /// returns value for given key is already in the storage (or error)
-    async fn get(&self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error>;
+impl Display for TransactionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
-    /// inserts/updates the value in the storage belongs to the given key (or error)
-    /// must always check if returned with success! (a real db could return Err<DbError>)
-    /// NOTE: if the network would lose the response of the server that is a big problem!!!
-    #[must_use]
-    async fn insert(&mut self, key: Self::Key, state: Self::Value) -> Result<(), Self::Error>;
+impl FromStr for TransactionId {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        u32::from_str(s).map(|id| TransactionId(id))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -41,65 +39,24 @@ pub enum TransactionState {
                         //          would not be possible, so I leave this here...
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct LedgerError;
-
-impl Display for LedgerError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ledger error")
-    }
-}
-
-impl Error for LedgerError {}
-
-/// An in-memory implementation of 'Ledger'
-/// Hopefully this fits in memory (in worst case 64GB memory usage estimated),
-/// but persistent storage would be better (or required if the message history is not archived elsewhere)
-/// (Vec would use somewhat less memory, but slower, allocated in one large block)
-#[derive(Debug)]
-pub struct InMemoryLedger {
-    db: HashMap<TransactionId, TransactionState>,
-}
-
-impl InMemoryLedger {
-    /// simulate a db connection
-    pub fn connect() -> Option<Self> {
-        Some(Self {
-            db: HashMap::<TransactionId, TransactionState>::new(),
-        })
-    }
-}
-
+//transaction ledger trait
 #[async_trait]
-impl Ledger for InMemoryLedger {
-    type Error = LedgerError;
-    type Key = TransactionId;
-    type Value = TransactionState;
+pub trait Ledger: Send + Sync {
+    type Error: Send + Sync;
 
-    async fn contains(&self, key: Self::Key) -> Result<bool, Self::Error> {
-        #[cfg(feature = "simulate-delays")]
-        sleep(Duration::from_millis(1000)).await;
+    /// returns true if the given key is already in the storage (or error)
+    async fn contains(&self, key: TransactionId) -> Result<bool, Self::Error>;
 
-        //real db could return Err<DbError>
-        Ok(self.db.contains_key(&key))
-    }
+    /// returns value for given key is already in the storage (or error)
+    async fn get(&self, key: TransactionId) -> Result<Option<TransactionState>, Self::Error>;
 
-    async fn get(&self, key: Self::Key) -> Result<Option<TransactionState>, Self::Error> {
-        #[cfg(feature = "simulate-delays")]
-        sleep(Duration::from_millis(1000)).await;
-
-        //real db could return Err<DbError>
-        Ok(self.db.get(&key).map(|v| *v))
-    }
-
-    /// must always check if returned with success!
-    /// (a real db could return Err<DbError>)
+    /// inserts/updates the value in the storage belongs to the given key (or error)
+    /// must always check if returned with success! (a real db could return Err<DbError>)
+    /// NOTE: if the network would lose the response of the server that is a big problem!!!
     #[must_use]
-    async fn insert(&mut self, key: Self::Key, state: TransactionState) -> Result<(), Self::Error> {
-        #[cfg(feature = "simulate-delays")]
-        sleep(Duration::from_millis(1000)).await;
-
-        self.db.insert(key, state);
-        Ok(())
-    }
+    async fn insert(
+        &mut self,
+        key: TransactionId,
+        state: TransactionState,
+    ) -> Result<(), Self::Error>;
 }

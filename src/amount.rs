@@ -26,13 +26,13 @@ impl Amount {
     pub const MINUS_ONE: Amount = Amount(-Amount::FRACTION);
 
     /// returns None in cases when of overflow would happen!
-    pub fn checked_add(lhs: Amount, rhs: Amount) -> Option<Amount> {
-        lhs.0.checked_add(rhs.0).map(|val| Amount(val))
+    pub fn checked_add(self, rhs: Amount) -> Option<Amount> {
+        self.0.checked_add(rhs.0).map(|val| Amount(val))
     }
 
     /// returns None in cases when of overflow would happen!
-    pub fn checked_sub(lhs: Amount, rhs: Amount) -> Option<Amount> {
-        lhs.0.checked_sub(rhs.0).map(|val| Amount(val))
+    pub fn checked_sub(self, rhs: Amount) -> Option<Amount> {
+        self.0.checked_sub(rhs.0).map(|val| Amount(val))
     }
 }
 

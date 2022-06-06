@@ -1,18 +1,16 @@
 pub mod account;
 pub mod account_hub;
-pub mod actions;
 pub mod amount;
+pub mod in_memory_ledger;
 pub mod ledger;
-
-use crate::account::TransactionError;
-pub use crate::account_hub::*;
-use crate::ledger::*;
 
 use pest::Parser;
 use std::str::FromStr;
-
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
+
+pub use crate::account_hub::*;
+use crate::amount::Amount;
 
 #[macro_use]
 extern crate pest_derive;
@@ -80,7 +78,7 @@ pub async fn process_csv<R, W, L>(
 where
     R: AsyncBufReadExt + Unpin,
     W: AsyncWriteExt + Unpin + Send,
-    L: Ledger<Key = TransactionId, Value = TransactionState> + 'static,
+    L: Ledger + 'static,
 {
     // spawn a task for logging action responses:
     let (response_sender, mut response_receiver) =
@@ -149,7 +147,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ledger::InMemoryLedger;
+    use crate::in_memory_ledger::InMemoryLedger;
 
     const INPUT: &[u8] = br###"type,   client, tx, amount
 deposit, 1, 1, 1.0,

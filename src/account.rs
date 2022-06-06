@@ -1,9 +1,24 @@
 use std::error::Error;
 use std::fmt;
 
-pub use crate::actions::*;
-pub use crate::amount::*;
-use crate::ledger::*;
+pub use crate::ledger::*;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum Transaction {
+    /// Means: increase the balance of an account by the given amount
+    Deposit(Amount),
+    /// Means: decrease the balance of an account by the given amount
+    Withdrawal(Amount),
+}
+
+/// List of account manipulation actions
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum Action {
+    Transact((TransactionId, Transaction)),
+    Dispute(TransactionId),
+    Resolve(TransactionId),
+    ChargeBack(TransactionId),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TransactionError {
@@ -62,7 +77,7 @@ pub struct Account<L> {
 
 impl<L> Account<L>
 where
-    L: Ledger<Key = TransactionId, Value = TransactionState>,
+    L: Ledger,
 {
     /// Creates a not locked account with zero balance.
     pub fn new(ledger: L) -> Self {
@@ -264,6 +279,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::in_memory_ledger::*;
     use std::str::FromStr;
 
     async fn deposit(

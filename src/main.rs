@@ -1,10 +1,9 @@
-use accounter::ledger::InMemoryLedger;
-use accounter::*;
-
 use std::env;
 use std::process;
-
 use tokio::fs::File;
+
+use accounter::in_memory_ledger::*;
+use accounter::*;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
