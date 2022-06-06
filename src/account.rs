@@ -52,18 +52,20 @@ impl fmt::Display for TransactionError {
 
 impl Error for TransactionError {}
 
-pub struct Account {
+#[derive(Debug)]
+pub struct Account<L> {
     total: Amount,
     held: Amount,
     locked: bool,
-    ledger: Box<dyn Ledger<Error = (), Key = TransactionId, Value = TransactionState>>,
+    ledger: L,
 }
 
-impl Account {
+impl<L> Account<L>
+where
+    L: Ledger<Key = TransactionId, Value = TransactionState>,
+{
     /// Creates a not locked account with zero balance.
-    pub fn new(
-        ledger: Box<dyn Ledger<Error = (), Key = TransactionId, Value = TransactionState>>,
-    ) -> Self {
+    pub fn new(ledger: L) -> Self {
         Account {
             total: Amount::ZERO,
             held: Amount::ZERO,
@@ -265,7 +267,7 @@ mod tests {
     use std::str::FromStr;
 
     async fn deposit(
-        account: &mut Account,
+        account: &mut Account<InMemoryLedger>,
         id: u32,
         amount: &str,
         expected: Result<(), TransactionError>,
@@ -282,7 +284,7 @@ mod tests {
     }
 
     async fn withdraw(
-        account: &mut Account,
+        account: &mut Account<InMemoryLedger>,
         id: u32,
         amount: &str,
         expected: Result<(), TransactionError>,
@@ -298,7 +300,11 @@ mod tests {
         );
     }
 
-    async fn dispute(account: &mut Account, id: u32, expected: Result<(), TransactionError>) {
+    async fn dispute(
+        account: &mut Account<InMemoryLedger>,
+        id: u32,
+        expected: Result<(), TransactionError>,
+    ) {
         assert_eq!(
             account
                 .execute(Action::Dispute(TransactionId::from(id)))
@@ -306,7 +312,11 @@ mod tests {
             expected
         );
     }
-    async fn resolve(account: &mut Account, id: u32, expected: Result<(), TransactionError>) {
+    async fn resolve(
+        account: &mut Account<InMemoryLedger>,
+        id: u32,
+        expected: Result<(), TransactionError>,
+    ) {
         assert_eq!(
             account
                 .execute(Action::Resolve(TransactionId::from(id)))
@@ -314,7 +324,11 @@ mod tests {
             expected
         );
     }
-    async fn charge_back(account: &mut Account, id: u32, expected: Result<(), TransactionError>) {
+    async fn charge_back(
+        account: &mut Account<InMemoryLedger>,
+        id: u32,
+        expected: Result<(), TransactionError>,
+    ) {
         assert_eq!(
             account
                 .execute(Action::ChargeBack(TransactionId::from(id)))
@@ -324,7 +338,7 @@ mod tests {
     }
 
     fn expect_balance(
-        account: &mut Account,
+        account: &mut Account<InMemoryLedger>,
         available: &str,
         total: &str,
         held: &str,
@@ -336,7 +350,7 @@ mod tests {
         assert_eq!(account.is_locked(), locked);
     }
 
-    fn connect() -> Account {
+    fn connect() -> Account<InMemoryLedger> {
         Account::new(InMemoryLedger::connect().unwrap())
     }
 

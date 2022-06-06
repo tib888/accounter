@@ -6,6 +6,7 @@ pub mod ledger;
 
 use crate::account::TransactionError;
 pub use crate::account_hub::*;
+use crate::ledger::*;
 
 use pest::Parser;
 use std::str::FromStr;
@@ -71,14 +72,15 @@ fn parse_csv_line(line: &str) -> Result<(ClientId, Action), ParseError> {
 /// Executes the transactions given in well formed lines, the writes out the summary of each client account in csv format with
 /// "client,available,held,total,locked" header line to 'writer'.
 /// If "error-print" feature is enabled, failures are logged on stderr.
-pub async fn process_csv<R, W>(
-    mut accounts: AccountHub,
+pub async fn process_csv<R, W, L>(
+    mut accounts: AccountHub<L>,
     reader: R,
     writer: &mut W,
 ) -> Result<(), std::io::Error>
 where
     R: AsyncBufReadExt + Unpin,
     W: AsyncWriteExt + Unpin + Send,
+    L: Ledger<Key = TransactionId, Value = TransactionState> + 'static,
 {
     // spawn a task for logging action responses:
     let (response_sender, mut response_receiver) =

@@ -1,10 +1,10 @@
 /// Account related actions
+use crate::amount::Amount;
 use std::fmt::Display;
 use std::str::FromStr;
 
 /// Transaction ids wrapped in new type to avoid mixing them with other ids
-use crate::amount::Amount;
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 pub struct TransactionId(u32);
 
 impl From<u32> for TransactionId {
@@ -27,7 +27,7 @@ impl FromStr for TransactionId {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum Transaction {
     /// Means: increase the balance of an account by the given amount
     Deposit(Amount),
@@ -36,7 +36,7 @@ pub enum Transaction {
 }
 
 /// List of account manipulation actions
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum Action {
     Transact((TransactionId, Transaction)),
     Dispute(TransactionId),

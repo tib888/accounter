@@ -8,26 +8,19 @@ use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{self, Sender};
 use tokio::task::JoinHandle;
 
-use std::cmp::{Ord, Ordering};
+use std::cmp::Ord;
 use std::collections::BTreeMap;
 use std::fmt::Display;
-
 use std::str::FromStr;
 
 /// Client ids wrapped in new type to avoid mixing them with other ids.
 /// Used to address the accounts managed by AccountHub.
-#[derive(Debug, PartialEq, Clone, Copy, Eq, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash)]
 pub struct ClientId(u16);
 
 impl From<u16> for ClientId {
     fn from(v: u16) -> Self {
         ClientId(v)
-    }
-}
-
-impl Ord for ClientId {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0.cmp(&other.0)
     }
 }
 
@@ -46,31 +39,23 @@ impl FromStr for ClientId {
 }
 
 /// Owner of client accounts, entry point to access them.
-pub struct AccountHub {
-    accounts: BTreeMap<ClientId, (Sender<Action>, JoinHandle<(ClientId, Account)>)>,
-    ledger_connector: fn(
-        ClientId,
-    ) -> Result<
-        Box<dyn Ledger<Error = (), Key = TransactionId, Value = TransactionState>>,
-        (),
-    >,
+#[derive(Debug)]
+pub struct AccountHub<L> {
+    accounts: BTreeMap<ClientId, (Sender<Action>, JoinHandle<(ClientId, Account<L>)>)>,
+    ledger_connector: fn(ClientId) -> Option<L>,
 }
 
-impl AccountHub {
+impl<L> AccountHub<L>
+where
+    L: Ledger<Key = TransactionId, Value = TransactionState> + 'static,
+{
     /// When a 'fresh' ClientId received by AccountHub, it creates a new account using
     /// the given 'ledger_connector' lambda function.
     /// This way easy to switch ledger implementations.
-    pub fn new(
-        ledger_connector: fn(
-            ClientId,
-        ) -> Result<
-            Box<dyn Ledger<Error = (), Key = TransactionId, Value = TransactionState>>,
-            (),
-        >,
-    ) -> Self {
+    pub fn new(ledger_connector: fn(ClientId) -> Option<L>) -> Self {
         AccountHub {
-            accounts: BTreeMap::<ClientId, (Sender<Action>, JoinHandle<(ClientId, Account)>)>::new(
-            ),
+            accounts:
+                BTreeMap::<ClientId, (Sender<Action>, JoinHandle<(ClientId, Account<L>)>)>::new(),
             ledger_connector: ledger_connector,
         }
     }
@@ -91,7 +76,7 @@ impl AccountHub {
             //for new clients an account with a transaction database has to be created
             //and on success send the first action for processing by his account
             match (self.ledger_connector)(client_id) {
-                Ok(ledger) => {
+                Some(ledger) => {
                     let (action_sender, mut action_receiver) = mpsc::channel::<Action>(16);
                     let mut account = Account::new(ledger);
                     let responder = response_sender.clone(); //each spawned task has his own sender to the response channel
@@ -122,7 +107,7 @@ impl AccountHub {
                         .insert(client_id, (action_sender, join_handle));
                     result
                 }
-                Err(_) => {
+                _ => {
                     #[cfg(feature = "error-print")]
                     eprint!("Transaction refused: Database connection failed (client: {client_id} {:?})\n", action);
                     Ok(())
@@ -133,8 +118,8 @@ impl AccountHub {
 
     /// Returns the state of accounts after all actions executed.
     /// Consumes self - this way blocks sending further actions for execution.
-    pub async fn summarize(mut self) -> Vec<(ClientId, Account)> {
-        let mut accounts = Vec::<(ClientId, Account)>::new();
+    pub async fn summarize(mut self) -> Vec<(ClientId, Account<L>)> {
+        let mut accounts = Vec::<(ClientId, Account<L>)>::new();
         //TODO Nightly has "pop_first"
         //luckily the BTreeMap is sorted by key, so always produces the same result (good for unit tests).
         let clients: Vec<_> = self.accounts.keys().cloned().collect();

@@ -4,8 +4,6 @@ use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-
 /// Amount is a new type which represent funds.
 /// Any arithmetics with it must be carefully thought so the usual operators are not implemented, just checked ones.
 ///
@@ -13,18 +11,19 @@ use std::str::FromStr;
 /// per transaction (or even in one account balance).
 /// It is using fixed point arithmetics with 4 digits precision, on a 64bit signed integer
 /// this way faster, more memory efficient, than to work on decimals
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Amount(i64);
 
 impl Amount {
-    const FRACT_DIGITS: usize = 4; //number of fractional digits to use
-    const FRACT: i64 = i64::pow(10, Amount::FRACT_DIGITS as u32); //10^4 = 10_000
-    const FRACT_DEC: Decimal = Decimal::from_parts(Amount::FRACT as u32, 0, 0, false, 0); //10^4 = 10_000
+    const FRACTION_DIGITS: usize = 4; //number of fractional digits to use
+    const FRACTION: i64 = i64::pow(10, Amount::FRACTION_DIGITS as u32); //10^4 = 10_000
+    const FRACTION_DEC: Decimal = Decimal::from_parts(Amount::FRACTION as u32, 0, 0, false, 0); //10^4 = 10_000
 
     pub const MAX: Amount = Amount(i64::MAX);
     pub const MIN: Amount = Amount(i64::MIN);
     pub const ZERO: Amount = Amount(0);
-    pub const ONE: Amount = Amount(Amount::FRACT);
-    pub const MINUS_ONE: Amount = Amount(-Amount::FRACT);
+    pub const ONE: Amount = Amount(Amount::FRACTION);
+    pub const MINUS_ONE: Amount = Amount(-Amount::FRACTION);
 
     /// returns None in cases when of overflow would happen!
     pub fn checked_add(lhs: Amount, rhs: Amount) -> Option<Amount> {
@@ -41,18 +40,18 @@ impl Display for Amount {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if self.0 == 0 {
             write!(f, "0")
-        } else if self.0 >= Amount::FRACT || self.0 <= -Amount::FRACT {
+        } else if self.0 >= Amount::FRACTION || self.0 <= -Amount::FRACTION {
             let s = format!("{}", self.0);
             let l = s.len();
-            write!(f, "{}", &s[0..l - Amount::FRACT_DIGITS])?;
-            let fract = &s[l - Amount::FRACT_DIGITS..l].trim_end_matches('0');
-            if fract.len() > 0 {
-                write!(f, ".{}", fract)
+            write!(f, "{}", &s[0..l - Amount::FRACTION_DIGITS])?;
+            let fraction = &s[l - Amount::FRACTION_DIGITS..l].trim_end_matches('0');
+            if fraction.len() > 0 {
+                write!(f, ".{}", fraction)
             } else {
                 Ok(())
             }
         } else {
-            let s = format!("{}", self.0.abs() + Amount::FRACT);
+            let s = format!("{}", self.0.abs() + Amount::FRACTION);
             let l = s.len();
             if self.0 > 0 {
                 write!(f, "0.")?;
@@ -62,14 +61,14 @@ impl Display for Amount {
             write!(
                 f,
                 "{}",
-                s[l - Amount::FRACT_DIGITS..l].trim_end_matches('0')
+                s[l - Amount::FRACTION_DIGITS..l].trim_end_matches('0')
             )
         }
     }
 }
 
 /// Signals that amount parsing from string was not successful
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ParseError;
 
 impl Display for ParseError {
@@ -85,7 +84,7 @@ impl FromStr for Amount {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(decimal) = Decimal::from_str(s) {
-            let n = decimal * Amount::FRACT_DEC;
+            let n = decimal * Amount::FRACTION_DEC;
             if !n.fract().is_zero() {
                 return Err(ParseError);
             };
@@ -130,12 +129,12 @@ mod tests {
         assert_eq!(Amount::from_str(".0"), Ok(Amount::ZERO));
         assert_eq!(Amount::from_str("0."), Ok(Amount::ZERO));
         assert_eq!(Amount::from_str("0.0"), Ok(Amount::ZERO));
-        assert_eq!(Amount::from_str("1.0"), Ok(Amount(Amount::FRACT)));
-        assert_eq!(Amount::from_str("+1.0"), Ok(Amount(Amount::FRACT)));
-        assert_eq!(Amount::from_str("-1.0"), Ok(Amount(-Amount::FRACT)));
-        assert_eq!(Amount::from_str("1.00000"), Ok(Amount(Amount::FRACT)));
-        assert_eq!(Amount::from_str("+1.00000"), Ok(Amount(Amount::FRACT)));
-        assert_eq!(Amount::from_str("-1.00000"), Ok(Amount(-Amount::FRACT)));
+        assert_eq!(Amount::from_str("1.0"), Ok(Amount(Amount::FRACTION)));
+        assert_eq!(Amount::from_str("+1.0"), Ok(Amount(Amount::FRACTION)));
+        assert_eq!(Amount::from_str("-1.0"), Ok(Amount(-Amount::FRACTION)));
+        assert_eq!(Amount::from_str("1.00000"), Ok(Amount(Amount::FRACTION)));
+        assert_eq!(Amount::from_str("+1.00000"), Ok(Amount(Amount::FRACTION)));
+        assert_eq!(Amount::from_str("-1.00000"), Ok(Amount(-Amount::FRACTION)));
         assert_eq!(Amount::from_str("922337203685477.5807"), Ok(Amount::MAX));
         assert_eq!(Amount::from_str("+922337203685477.5807"), Ok(Amount::MAX));
         assert_eq!(Amount::from_str("-922337203685477.5808"), Ok(Amount::MIN));
