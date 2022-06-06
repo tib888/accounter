@@ -59,7 +59,7 @@ where
     }
 
     /// Forwards the given action request message to the account addressed by client_id.
-    /// If it not exist yet, a new account is created automatically by the lambda function
+    /// If it not exists yet, a new account is created automatically by the lambda function
     /// passed to the AccountHub::new
     pub async fn execute(
         &mut self,
@@ -81,13 +81,7 @@ where
 
                     // for each account spawn a task which processes his actions form the channel
                     let join_handle: JoinHandle<_> = tokio::spawn(async move {
-                        #[cfg(feature = "trace-print")]
-                        eprintln!("> {client_id} spawned");
-
                         while let Some(action) = action_receiver.recv().await {
-                            #[cfg(feature = "trace-print")]
-                            eprintln!("> {client_id} executing: {:?}", action);
-
                             let response = account.execute(action).await;
 
                             //if "error-print" feature is not enable will execute faster (not sending responses, no queue syncing is needed)
@@ -96,8 +90,6 @@ where
                             //discard possible error
                         }
 
-                        #[cfg(feature = "trace-print")]
-                        eprintln!("> {client_id} is stopped.");
                         (client_id, account)
                     });
                     let result = action_sender.send(action).await; //send the first action!
@@ -127,8 +119,6 @@ where
                 drop(sender);
                 if let Ok(account) = join_handle.await {
                     accounts.push(account);
-                    #[cfg(feature = "trace-print")]
-                    eprint!("> closed {client_id}\n");
                 }
             }
         }
