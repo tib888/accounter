@@ -32,7 +32,7 @@ impl FromStr for ClientId {
     type Err = std::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        u16::from_str(s).map(|id| ClientId(id))
+        u16::from_str(s).map(ClientId)
     }
 }
 
@@ -54,7 +54,7 @@ where
         AccountHub {
             accounts:
                 BTreeMap::<ClientId, (Sender<Action>, JoinHandle<(ClientId, Account<L>)>)>::new(),
-            ledger_connector: ledger_connector,
+            ledger_connector,
         }
     }
 
@@ -99,7 +99,7 @@ where
                 }
                 _ => {
                     #[cfg(feature = "error-print")]
-                    eprint!("Transaction refused: Database connection failed (client: {client_id} {:?})\n", action);
+                    eprintln!("Transaction refused: Database connection failed (client: {client_id} {:?})", action);
                     Ok(())
                 }
             }

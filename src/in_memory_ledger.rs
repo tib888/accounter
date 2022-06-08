@@ -54,7 +54,7 @@ impl Ledger for InMemoryLedger {
         sleep(Duration::from_millis(1000)).await;
 
         //real db could return Err<DbError>
-        Ok(self.db.get(&key).map(|v| *v))
+        Ok(self.db.get(&key).copied())
     }
 
     /// must always check if returned with success!

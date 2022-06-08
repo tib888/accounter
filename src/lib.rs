@@ -21,7 +21,7 @@ struct ActionParser;
 
 /// tuns a csv record into executable actions
 fn parse_csv_line(line: &str) -> Result<(ClientId, Action), ParseError> {
-    if let Ok(items) = ActionParser::parse(Rule::line_input, &line) {
+    if let Ok(items) = ActionParser::parse(Rule::line_input, line) {
         //we get here only with valid number of items thanks to the parser!
         let mut cid = Option::<ClientId>::None;
         let mut tid = Option::<TransactionId>::None;
@@ -104,21 +104,21 @@ where
             Ok((client_id, action)) => {
                 if let Err(_err) = accounts.execute(client_id, action, &response_sender).await {
                     #[cfg(feature = "error-print")]
-                    eprint!(
-                        "Transaction refused: {_err} (client: {client_id} {:?})\n",
+                    eprintln!(
+                        "Transaction refused: {_err} (client: {client_id} {:?})",
                         action
                     );
                 }
             }
             Err(_err) => {
                 #[cfg(feature = "error-print")]
-                eprint!("Record skipped due to \"{_err}\" in \"{line}\"\n");
+                eprintln!("Record skipped due to \"{_err}\" in \"{line}\"");
             }
         }
     }
 
     writer
-        .write(b"client,available,held,total,locked\n")
+        .write_all(b"client,available,held,total,locked\n")
         .await?;
 
     //summarize all started transactions
@@ -137,7 +137,7 @@ where
 
         if let Err(_err) = writer.write(summary.as_bytes()).await {
             #[cfg(feature = "error-print")]
-            eprint!("Was unable to write out summary \"{summary}\" due to error: \"{_err}\"\n");
+            eprintln!("Was unable to write out summary \"{summary}\" due to error: \"{_err}\"");
         }
     }
 

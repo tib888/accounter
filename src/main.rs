@@ -28,13 +28,13 @@ fn main() {
                 .await
                 {
                     #[cfg(feature = "error-print")]
-                    eprint!("Error: {_err}\n");
+                    eprintln!("Error: {_err}");
                     process::exit(3);
                 }
             }
             Err(_err) => {
                 #[cfg(feature = "error-print")]
-                eprint!("Error: {_err} \"{filename}\"\n");
+                eprintln!("Error: {_err} \"{filename}\"");
                 process::exit(2);
             }
         };

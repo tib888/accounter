@@ -27,12 +27,12 @@ impl Amount {
 
     /// returns None in cases when of overflow would happen!
     pub fn checked_add(self, rhs: Amount) -> Option<Amount> {
-        self.0.checked_add(rhs.0).map(|val| Amount(val))
+        self.0.checked_add(rhs.0).map(Amount)
     }
 
     /// returns None in cases when of overflow would happen!
     pub fn checked_sub(self, rhs: Amount) -> Option<Amount> {
-        self.0.checked_sub(rhs.0).map(|val| Amount(val))
+        self.0.checked_sub(rhs.0).map(Amount)
     }
 }
 
@@ -45,7 +45,7 @@ impl Display for Amount {
             let l = s.len();
             write!(f, "{}", &s[0..l - Amount::FRACTION_DIGITS])?;
             let fraction = &s[l - Amount::FRACTION_DIGITS..l].trim_end_matches('0');
-            if fraction.len() > 0 {
+            if !fraction.is_empty() {
                 write!(f, ".{}", fraction)
             } else {
                 Ok(())
@@ -88,7 +88,7 @@ impl FromStr for Amount {
             if !n.fract().is_zero() {
                 return Err(ParseError);
             };
-            n.to_i64().map(|int| Amount(int)).ok_or(ParseError)
+            n.to_i64().map(Amount).ok_or(ParseError)
         } else {
             Err(ParseError)
         }

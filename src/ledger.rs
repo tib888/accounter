@@ -24,7 +24,7 @@ impl FromStr for TransactionId {
     type Err = std::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        u32::from_str(s).map(|id| TransactionId(id))
+        u32::from_str(s).map(TransactionId)
     }
 }
 

@@ -85,7 +85,7 @@ where
             total: Amount::ZERO,
             held: Amount::ZERO,
             locked: false,
-            ledger: ledger,
+            ledger,
         }
     }
 
