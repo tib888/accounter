@@ -135,7 +135,7 @@ where
             account.is_locked()
         );
 
-        if let Err(_err) = writer.write(summary.as_bytes()).await {
+        if let Err(_err) = writer.write_all(summary.as_bytes()).await {
             #[cfg(feature = "error-print")]
             eprintln!("Was unable to write out summary \"{summary}\" due to error: \"{_err}\"");
         }
