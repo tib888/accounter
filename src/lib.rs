@@ -4,16 +4,16 @@ pub mod amount;
 pub mod in_memory_ledger;
 pub mod ledger;
 
-use pest::Parser;
 use std::str::FromStr;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 
+use log::{error, info, warn};
+use pest::Parser;
+use pest_derive::*;
+
 pub use crate::account_hub::*;
 use crate::amount::Amount;
-
-#[macro_use]
-extern crate pest_derive;
 
 #[derive(Parser)]
 #[grammar = "actions.pest"]
@@ -69,7 +69,7 @@ fn parse_csv_line(line: &str) -> Result<(ClientId, Action), ParseError> {
 /// The "type, client, tx, amount" header is skipped, just like any other lines with parse error.
 /// Executes the transactions given in well formed lines, the writes out the summary of each client account in csv format with
 /// "client,available,held,total,locked" header line to 'writer'.
-/// If "error-print" feature is enabled, failures are logged on stderr.
+/// If logging is enabled (in environment variable RUST_LOG=trace), failures are logged on stderr.
 pub async fn process_csv<R, W, L>(
     mut accounts: AccountHub<L>,
     reader: R,
@@ -85,11 +85,10 @@ where
         mpsc::channel::<(Result<(), TransactionError>, (ClientId, Action))>(64);
     tokio::spawn(async move {
         while let Some((_response, (_client_id, _action))) = response_receiver.recv().await {
-            #[cfg(feature = "error-print")]
             match _response {
-                Ok(()) => eprintln!("## Transaction successful: {_client_id} {:?}", _action),
+                Ok(()) => info!("## Transaction successful: {_client_id} {:?}", _action),
                 Err(err) => {
-                    eprintln!("## Transaction refused: {err} - {_client_id} {:?}", _action)
+                    warn!("## Transaction refused: {err} - {_client_id} {:?}", _action)
                 }
             }
         }
@@ -103,16 +102,14 @@ where
         match parse_csv_line(&line) {
             Ok((client_id, action)) => {
                 if let Err(_err) = accounts.execute(client_id, action, &response_sender).await {
-                    #[cfg(feature = "error-print")]
-                    eprintln!(
+                    warn!(
                         "Transaction refused: {_err} (client: {client_id} {:?})",
                         action
                     );
                 }
             }
             Err(_err) => {
-                #[cfg(feature = "error-print")]
-                eprintln!("Record skipped due to \"{_err}\" in \"{line}\"");
+                warn!("Record skipped due to \"{_err}\" in \"{line}\"");
             }
         }
     }
@@ -136,8 +133,7 @@ where
         );
 
         if let Err(_err) = writer.write_all(summary.as_bytes()).await {
-            #[cfg(feature = "error-print")]
-            eprintln!("Was unable to write out summary \"{summary}\" due to error: \"{_err}\"");
+            error!("Was unable to write out summary \"{summary}\" due to error: \"{_err}\"");
         }
     }
 

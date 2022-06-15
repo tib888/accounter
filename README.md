@@ -42,7 +42,7 @@ Also deposit to cover the possible loss (and potentially automatically unlock) i
 
 * IDEAS:  An 'unlock' function is likely needed (at least when the available amount never went to negative). Also one may want to enumerate open disputes / executed charge backs (these states are stored in the ledger). -- These and current balance query could be implemented in further actions (with receiver parameters)...
 
-* NOTE: "error-print" feature introduced - may be removed form default features if no output required on stderr
+* //NOTE: "error-print" feature introduced - may be removed form default features if no output required on stderr
 
 * NOTE: To simulate the real-world requirements, where the transaction messages are likely coming as network messages, and the ledger database is likely connected also trough network, I'll switch to async using tokio runtime.
 
@@ -56,7 +56,9 @@ Each client account could have its own message queue in which the order of his t
 * Since transaction processing is async, error reporting is not immediate - a response collector task is spawned, which collects the responses from accounts
 In this test project this is not needed, but in real life likely it would be...
 
-* NOTE: turning off "error-print" feature will improve processing speed (not sending responses, no queue syncing is needed, etc.)
+* //NOTE: turning off "error-print" feature will improve processing speed (not sending responses, no queue syncing is needed, etc.)
 
 * NOTE: It would be nice to add some real stress tests for speed and memory usage.
 However the estimation is that we use about 16 bytes per transaction so the server should have more than 64Gb memory (or the InMemoryLedger have to be replaced...)
+
+NOTE: "error-print" feature is replaced with pretty_env_logger - RUST_LOG environment variable sets the logging level (for example "trace")

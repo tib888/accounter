@@ -1,3 +1,4 @@
+use log::error;
 use std::env;
 use std::process;
 use tokio::fs::File;
@@ -6,10 +7,10 @@ use accounter::in_memory_ledger::*;
 use accounter::*;
 
 fn main() {
+    pretty_env_logger::init();
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        #[cfg(feature = "error-print")]
-        eprintln!("Error: missing command line argument: the name of transactions file.");
+        error!("Error: missing command line argument: the name of transactions file.");
         process::exit(1);
     }
     let filename = &args[1];
@@ -27,14 +28,12 @@ fn main() {
                 )
                 .await
                 {
-                    #[cfg(feature = "error-print")]
-                    eprintln!("Error: {_err}");
+                    error!("Error: {_err}");
                     process::exit(3);
                 }
             }
             Err(_err) => {
-                #[cfg(feature = "error-print")]
-                eprintln!("Error: {_err} \"{filename}\"");
+                error!("Error: {_err} \"{filename}\"");
                 process::exit(2);
             }
         };

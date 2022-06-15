@@ -9,6 +9,8 @@ use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{self, Sender};
 use tokio::task::JoinHandle;
 
+use log::error;
+
 pub use crate::account::*;
 
 /// Client ids wrapped in new type to avoid mixing them with other ids.
@@ -83,9 +85,6 @@ where
                     let join_handle: JoinHandle<_> = tokio::spawn(async move {
                         while let Some(action) = action_receiver.recv().await {
                             let response = account.execute(action).await;
-
-                            //if "error-print" feature is not enable will execute faster (not sending responses, no queue syncing is needed)
-                            #[cfg(feature = "error-print")]
                             let _err = responder.send((response, (client_id, action))).await;
                             //discard possible error
                         }
@@ -98,8 +97,7 @@ where
                     result
                 }
                 _ => {
-                    #[cfg(feature = "error-print")]
-                    eprintln!("Transaction refused: Database connection failed (client: {client_id} {:?})", action);
+                    error!("Transaction refused: Database connection failed (client: {client_id} {:?})", action);
                     Ok(())
                 }
             }
