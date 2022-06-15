@@ -86,9 +86,9 @@ where
     tokio::spawn(async move {
         while let Some((_response, (_client_id, _action))) = response_receiver.recv().await {
             match _response {
-                Ok(()) => info!("## Transaction successful: {_client_id} {:?}", _action),
+                Ok(()) => info!("Transaction successful: {_client_id} {:?}", _action),
                 Err(err) => {
-                    warn!("## Transaction refused: {err} - {_client_id} {:?}", _action)
+                    warn!("Transaction refused: {err} - {_client_id} {:?}", _action)
                 }
             }
         }

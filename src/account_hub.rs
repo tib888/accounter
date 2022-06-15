@@ -9,7 +9,7 @@ use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{self, Sender};
 use tokio::task::JoinHandle;
 
-use log::error;
+use log::{error, log_enabled};
 
 pub use crate::account::*;
 
@@ -85,7 +85,9 @@ where
                     let join_handle: JoinHandle<_> = tokio::spawn(async move {
                         while let Some(action) = action_receiver.recv().await {
                             let response = account.execute(action).await;
-                            let _err = responder.send((response, (client_id, action))).await;
+                            if log_enabled!(log::Level::Error) {
+                                let _err = responder.send((response, (client_id, action))).await;
+                            }
                             //discard possible error
                         }
 
