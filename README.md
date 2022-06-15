@@ -61,4 +61,4 @@ In this test project this is not needed, but in real life likely it would be...
 * NOTE: It would be nice to add some real stress tests for speed and memory usage.
 However the estimation is that we use about 16 bytes per transaction so the server should have more than 64Gb memory (or the InMemoryLedger have to be replaced...)
 
-NOTE: "error-print" feature is replaced with pretty_env_logger - RUST_LOG environment variable sets the logging level (for example "trace")
+NOTE: "error-print" feature is replaced with pretty_env_logger - RUST_LOG environment variable sets the logging level (for example "accounter=trace")
