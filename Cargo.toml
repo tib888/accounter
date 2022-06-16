@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 repository = "https://https://github.com/tib888/accounter"
 authors = ["Tibor Prokai"]
+description = "Process transactions to calculate account statuses"
 
 [dependencies]
 rust_decimal = "1.23"
@@ -14,7 +15,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "io-util", "fs", "io-std
 pretty_env_logger = "0.4"
 log = "0.4"
 dotenv = "0.13"
-clap = { version = "3.2", features = ["cargo"] }
+clap = { version = "3.2", features = ["derive", "env"] }
 
 [features]
 simulate-delays = [] #adds 1000ms delay to every ledger database transaction as simulation

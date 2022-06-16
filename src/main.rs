@@ -1,37 +1,40 @@
-use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
+use clap::Parser;
 use log::error;
-use std::env;
 use std::process;
 use tokio::fs::File;
 
 use accounter::in_memory_ledger::*;
 use accounter::*;
 
+#[derive(Parser, Debug)]
+#[clap(author, about, version)]
+struct Args {
+    /// Transactions file name
+    #[clap()]
+    filename: String,
+
+    /// Log level filters
+    /// [possible values: Off, Error, Warn, Info, Debug, Trace]
+    #[clap(short('l'), long, env("ACCOUNTS_LOG_LEVEL"))]
+    log_level: Option<String>,
+
+    /// Log write style
+    /// [possible values: Auto | Never | Always]
+    #[clap(short('s'), long, env("ACCOUNTS_LOG_STYLE"))]
+    log_style: Option<String>,
+}
+
 fn main() {
-    dotenv::dotenv().ok(); //looks fo .env file to set up environment variables, command arguments
-    pretty_env_logger::init();
+    dotenv::dotenv().ok(); //looks for .env file in the current and parent folders to set up environment variables
+    let args = Args::parse(); //reads command arguments (which may come from environment variables too)
 
-    let matches = App::new(crate_name!())
-        .version(crate_version!())
-        .author(crate_authors!())
-        .about(crate_description!())
-        .arg(
-            Arg::new("transactions file name")
-                .takes_value(true)
-                .required(true),
-        )
-        .get_matches();
+    pretty_env_logger::formatted_builder()
+        .parse_filters(&args.log_level.unwrap_or(String::default()))
+        .parse_write_style(&args.log_style.unwrap_or(String::default()))
+        .init();
 
-    let filename = match matches.get_one::<String>("transactions file name") {
-        Some(filename) => filename,
-        None => {
-            //unexpected, we should never get here (clap exits if required argument is missing)
-            error!("missing argument.");
-            process::exit(3);
-        }
-    };
     tokio::runtime::Runtime::new().unwrap().block_on(async {
-        match File::open(filename).await {
+        match File::open(&args.filename).await {
             Ok(file) => {
                 let capacity = 0x1000;
                 let reader = tokio::io::BufReader::with_capacity(capacity, file);
@@ -48,7 +51,7 @@ fn main() {
                 }
             }
             Err(_err) => {
-                error!("{_err} \"{filename}\"");
+                error!("{_err} \"{}\"", &args.filename);
                 process::exit(4);
             }
         };
